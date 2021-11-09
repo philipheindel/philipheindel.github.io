@@ -31,7 +31,7 @@ github_username:  philipheindel
 
 # Build settings
 theme: minima
-plugins:
+#plugins:
 #  - jekyll-feed
 
 # Exclude from processing.
