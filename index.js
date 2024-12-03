@@ -40,16 +40,22 @@ function getCurrentMonth() {
  * @param {string} month 
  * @returns {number}
  */
-function getMonthDays(month) {
-    
+function getMonthDays(year, month) {
+    return new Date(year, month, 0).getDate();
 }
 
 _("#start").addEventListener("click", function() {
     getCurrentMonth();
     //_("#header").innerText = "clicked but with get fn"
 });
-var val = 0
-_("#month").addEventListener("change", function() {
-    console.log("changed " + val + " times");
-    val += 1;
+
+_("#month").addEventListener("change", function(e) { 
+    let yearNumber = DATE.getFullYear();
+    let monthNumber = this.value;
+    let monthName = this.options[this.selectedIndex].text;
+    console.log("There are " + getMonthDays(2024, monthNumber, 0) + " days in " + monthName + " of " + yearNumber);
+});
+
+_("#year").addEventListener("keypress", function(e) {
+    console.log("key pressed on " + this.value)
 });
