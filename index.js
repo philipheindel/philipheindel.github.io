@@ -27,14 +27,23 @@ function __(selector) {
 
 //#region DATE FUNCTIONS
 /**
+ * Returns either the current year.
+ * 
+ * @param {string} type
+ * @returns {string}
+ */
+function getCurrentYear() {
+    return new Date().getFullYear();
+}
+
+/**
  * Returns either the number, full name, or shortened name of the current month.
  * 
  * @param {string} type
  * @returns {string}
  */
 function getCurrentMonth() {
-    const d = new Date();
-    console.log(MONTHS[d.getMonth()]);
+    return new Date().toLocaleDateString("default", { month: 'long' }); 
 }
 
 /**
@@ -48,7 +57,7 @@ function getMonthDays(year, month) {
 }
 
 function getFirstDayOfMonth(year, month) {
-    new Date(2024, 1, 1).toLocaleDateString("en", { weekday: 'long' }); 
+    return new Date(year, month, 1).toLocaleDateString("en", { weekday: 'long' }); 
 }
 //#endregion DATE FUNCTIONS
 
@@ -66,10 +75,16 @@ function init() {
 
 //#region EVENT LISTENERS
 _("#start").addEventListener("click", function() {
-    
-    
-    getCurrentMonth();
+    let year = getCurrentYear();
+    let month = getCurrentMonth();
 
+    //Get first day of month
+    let dates = new Array(35);
+    let cells = __("td > span");
+
+    cells.forEach(cell => {
+        console.log(cell.innerText);
+    });
 });
 
 _("#month").addEventListener("change", function(e) { 
