@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta content="text/html; charset=UTF-8; X-Content-Type-Options=nosniff" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just a placeholder</title>
+    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
+    <link rel="stylesheet" href="index.css" />
+</head>
+
+<body onload="init()">
+    <main>
+        <select name="month" id="month">
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+        </select>
+        <input type="text" name="year" id="year" pattern="^[12][0-9]{3}$" maxlength="4" />
+        <p>
+            At <u>least</u> <b>this</b> <mark>isn't</mark> <kbd>A</kbd> normal, <code>boring 404 page.</code>
+        </p>
+        <p>
+            This one has a button that probably doesn't do anything 👉 <button id="start">Button</button>
+        </p>
+        <table>
+            <tr>
+                <th>Sun</th>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+            </tr>
+            <tr id="week1">
+                <td class="">
+                    <span>01</span>
+                </td>
+                <td>
+                    <span>02</span>
+                </td>
+                <td>
+                    <span>03</span>
+                </td>
+                <td>
+                    <span>04</span>
+                </td>
+                <td>
+                    <span>05</span>
+                </td>
+                <td>
+                    <span>06</span>
+                </td>
+                <td>
+                    <span>07</span>
+                </td>
+            </tr>
+            <tr id="week2">
+                <td>
+                    <span>08</span>
+                </td>
+                <td>
+                    <span>09</span>
+                </td>
+                <td>
+                    <span>10</span>
+                </td>
+                <td>
+                    <span>11</span>
+                </td>
+                <td>
+                    <span>12</span>
+                </td>
+                <td>
+                    <span>13</span>
+                </td>
+                <td>
+                    <span>14</span>
+                </td>
+            </tr>
+            <tr id="week3">
+                <td>
+                    <span>15</span>
+                </td>
+                <td>
+                    <span>16</span>
+                </td>
+                <td>
+                    <span>17</span>
+                </td>
+                <td>
+                    <span>18</span>
+                </td>
+                <td>
+                    <span>19</span>
+                </td>
+                <td>
+                    <span>20</span>
+                </td>
+                <td>
+                    <span>21</span>
+                </td>
+            </tr>
+            <tr id="week4">
+                <td>
+                    <span>22</span>
+                </td>
+                <td>
+                    <span>23</span>
+                </td>
+                <td>
+                    <span>24</span>
+                </td>
+                <td>
+                    <span>25</span>
+                </td>
+                <td>
+                    <span>26</span>
+                </td>
+                <td>
+                    <span>27</span>
+                </td>
+                <td>
+                    <span>28</span>
+                </td>
+            </tr>
+            <tr id="week5">
+                <td>
+                    <span>29</span>
+                </td>
+                <td>
+                    <span>30</span>
+                </td>
+                <td>
+                    <span>31</span>
+                </td>
+                <td>
+                    <span>01</span>
+                </td>
+                <td>
+                    <span>02</span>
+                </td>
+                <td>
+                    <span>03</span>
+                </td>
+                <td>
+                    <span>04</span>
+                </td>
+            </tr>
+        </table>
+    </main>
+    <script src="index.js"></script>
+</body>
+
+</html>
