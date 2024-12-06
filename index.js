@@ -1,39 +1,53 @@
-/**
- * An array constant with an ordered list of the 12 months. 
- */
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thrusday", "Friday", "Saturday"];
 const DATE = new Date();
 
 //#region SELECTORS
 /**
- * 
- * @param {string} selector 
- * @returns {Element}
+ * Returns a single element from the provided CSS selector query.
+ * @param {string} selector A CSS selector to be passed to the querySelector function.
+ * @returns {Element} A single element based on the provided CSS selector.
  */
 function _(selector) {
     return document.querySelector(selector);
 }
 
 /**
- * 
- * @param {string} selector 
- * @returns {Element[]}
+ * Returns an array of elements from the provided CSS selector query.
+ * @param {string} selector A CSS selector to be passed to the querySelectorAll function.
+ * @returns {Element[]} An array of elements based on the provided CSS selector.
  */
 function __(selector) {
     return document.querySelectorAll(selector);
+}
+
+/**
+ * Returns a single element with the specified ID.
+ * @param {string} elementId The ID of the element to get.
+ * @returns {Element} A single element based on the provided ID.
+ */
+function id(elementId) {
+    return document.getElementById(elementId);
 }
 //#endregion SELECTORS
 
 //#region DATE FUNCTIONS
 /**
- * Returns either the current year.
+ * Returns the current year.
  * 
- * @param {string} type
  * @returns {string}
  */
 function getCurrentYear() {
     return new Date().getFullYear();
+}
+
+/**
+ * Returns either the year input into the Year textbox.
+ * 
+ * @returns {string}
+ */
+function getYear() {
+    return id("year").value;
 }
 
 /**
@@ -47,6 +61,14 @@ function getCurrentMonth() {
 }
 
 /**
+ * Returns either the number, full name, or shortened name of the current month.
+ * @returns {string}
+ */
+function getMonth() {
+    return id("month").options[id("month").selectedIndex].text
+}
+
+/**
  * Returns an array 
  * 
  * @param {string} month 
@@ -57,7 +79,7 @@ function getMonthDays(year, month) {
 }
 
 function getFirstDayOfMonth(year, month) {
-    return new Date(year, month, 1).toLocaleDateString("en", { weekday: 'long' }); 
+    return new Date(year, month, 1).toLocaleDateString("default", { weekday: 'long' }); 
 }
 //#endregion DATE FUNCTIONS
 
@@ -69,36 +91,43 @@ function removeAlphaChars(elementId) {
 
 //#region INITIALIZATION FUNCTIONS
 function init() {
-    _("#year").defaultValue = "2024";
+    id("year").defaultValue = "2024";
 }
 //#endregion INITIALIZATION FUNCTIONS
 
 //#region EVENT LISTENERS
-_("#start").addEventListener("click", function() {
-    let year = getCurrentYear();
-    let month = getCurrentMonth();
+id("start").addEventListener("click", function() {
+    let year = getYear();
+    let month = getMonth();
+    let firstDay = getFirstDayOfMonth(year, month);
+    let firstDayIndex = DAYS.findIndex((element) => (element == firstDay));
 
-    //Get first day of month
     let dates = new Array(35);
+    console.log(year)
+    console.log(month)
+    console.log(firstDay)
+    console.log(firstDayIndex)
     let cells = __("td > span");
+
+    
 
     cells.forEach(cell => {
         console.log(cell.innerText);
     });
 });
 
-_("#month").addEventListener("change", function(e) { 
-    let yearNumber = DATE.getFullYear();
+id("month").addEventListener("change", function(e) { 
+    let yearNumber = id("year").value;
     let monthNumber = this.value;
     let monthName = this.options[this.selectedIndex].text;
-    console.log("There are " + getMonthDays(2024, monthNumber, 0) + " days in " + monthName + " of " + yearNumber);
+    console.log("There are " + getMonthDays(yearNumber, monthNumber, 0) + " days in " + monthName + " of " + yearNumber);
 });
 
-_("#year").addEventListener("keyup", function(e) {
+id("year").addEventListener("keyup", function(e) {
     removeAlphaChars("#year");
 });
 
-_("#year").addEventListener("keydown", function(e) {
+id("year").addEventListener("keydown", function(e) {
     if (isNaN(e.key)) {
         removeAlphaChars("#year");
     }
