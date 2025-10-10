@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Tkinter GUI Builder — HTML + JS</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Interact.js for drag & resize helpers -->
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <aside id="toolbox">
+      <h3>Toolbox</h3>
+      <div id="tools">
+        <!-- each tool is draggable -->
+        <div class="tool" draggable="true" data-widget="frame">Frame</div>
+        <div class="tool" draggable="true" data-widget="labelframe">LabelFrame</div>
+        <div class="tool" draggable="true" data-widget="label">Label</div>
+        <div class="tool" draggable="true" data-widget="button">Button</div>
+        <div class="tool" draggable="true" data-widget="checkbutton">Checkbutton</div>
+        <div class="tool" draggable="true" data-widget="radiobutton">Radiobutton</div>
+        <div class="tool" draggable="true" data-widget="entry">Entry</div>
+        <div class="tool" draggable="true" data-widget="combobox">Combobox</div>
+        <div class="tool" draggable="true" data-widget="listbox">Listbox</div>
+        <div class="tool" draggable="true" data-widget="scrollbar">Scrollbar</div>
+        <div class="tool" draggable="true" data-widget="text">Text</div>
+        <div class="tool" draggable="true" data-widget="scale">Scale</div>
+        <div class="tool" draggable="true" data-widget="spinbox">Spinbox</div>
+        <div class="tool" draggable="true" data-widget="progressbar">Progressbar</div>
+        <div class="tool" draggable="true" data-widget="separator">Separator</div>
+        <div class="tool" draggable="true" data-widget="panedwindow">PanedWindow</div>
+        <div class="tool" draggable="true" data-widget="notebook">Notebook</div>
+        <div class="tool" draggable="true" data-widget="treeview">Treeview</div>
+      </div>
+      <hr/>
+      <div>
+        <label>Snap threshold: <input id="snapThreshold" type="number" value="8" min="0" max="50"/> px</label>
+      </div>
+    </aside>
+
+    <main id="canvas-area">
+      <div id="toolbar">
+        <button id="btn-delete">Delete</button>
+        <button id="btn-bring-front">Bring to Front</button>
+        <button id="btn-send-back">Send to Back</button>
+        <label><input type="checkbox" id="showGrid" /> Show grid</label>
+      </div>
+
+      <div id="preview-shell">
+        <div id="preview-resizer" class="resizable">
+          <div id="preview-header">Window Preview — resize me</div>
+          <div id="preview" tabindex="0"></div>
+        </div>
+      </div>
+
+      <div id="code-area">
+        <button id="toggle-code">Toggle Generated Code</button>
+        <div id="code-panel" class="collapsed">
+          <textarea id="generated-code" readonly></textarea>
+        </div>
+      </div>
+    </main>
+
+    <aside id="properties">
+      <h3>Properties</h3>
+      <div id="no-selection">No selection</div>
+      <div id="props-container" style="display:none;">
+        <h4 id="props-title"></h4>
+
+        <div class="prop-row">
+          <label>Widget Type: <span id="prop-type"></span></label>
+        </div>
+
+        <div class="prop-row">
+          <label>Text / Content</label>
+          <input id="prop-text" type="text"/>
+        </div>
+
+        <div class="prop-row">
+          <label>Position X</label>
+          <input id="prop-x" type="number">
+          <label>Y</label>
+          <input id="prop-y" type="number">
+        </div>
+
+        <div class="prop-row">
+          <label>Width</label>
+          <input id="prop-width" type="number">
+          <label>Height</label>
+          <input id="prop-height" type="number">
+        </div>
+
+        <div class="prop-row">
+          <label>Font</label>
+          <input id="prop-font-family" type="text" placeholder="e.g. Arial"/>
+          <label>Size</label>
+          <input id="prop-font-size" type="number" min="6" max="72"/>
+          <label><input id="prop-font-bold" type="checkbox" /> Bold</label>
+          <label><input id="prop-font-italic" type="checkbox" /> Italic</label>
+        </div>
+
+        <div class="prop-row">
+          <label>Background</label>
+          <input id="prop-bg" type="color"/>
+          <label>Foreground</label>
+          <input id="prop-fg" type="color"/>
+        </div>
+
+        <div id="special-props"></div>
+
+        <div class="prop-row">
+          <label>Advanced (JSON)</label>
+          <textarea id="prop-advanced" rows="6" placeholder='{"state":"disabled"}'></textarea>
+        </div>
+
+        <div class="prop-row">
+          <button id="apply-props">Apply</button>
+          <button id="duplicate">Duplicate</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
