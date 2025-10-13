@@ -7,17 +7,18 @@
 <style>
   body {
     margin: 0;
-    font-family: Segoe UI, sans-serif;
-    background-color: #f5f6fa;
+    font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+    background-color: #f3f3f3;
     display: flex;
     height: 100vh;
     overflow: hidden;
   }
 
-  /* Sidebar styles */
+  /* Left: Input fields */
   #builder {
-    width: 30%;
-    background: #fff;
+    width: 28%;
+    background: #ffffffcc;
+    backdrop-filter: blur(8px);
     border-right: 1px solid #ccc;
     padding: 20px;
     overflow-y: auto;
@@ -25,98 +26,147 @@
 
   #builder h2 {
     margin-top: 0;
+    font-weight: 600;
+    color: #1e1e1e;
   }
 
   label {
     display: block;
     margin-top: 10px;
-    font-weight: 600;
+    font-weight: 500;
   }
 
   input[type="text"], select {
     width: 100%;
     padding: 8px;
     margin-top: 4px;
-    border: 1px solid #bbb;
-    border-radius: 4px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
     font-size: 14px;
+    background-color: #fafafa;
   }
 
   input[type="checkbox"] {
     margin-right: 6px;
   }
 
-  /* Preview styles */
+  /* Center: Windows 11 message box preview */
   #preview {
     flex-grow: 1;
     display: flex;
-    flex-direction: column;
     justify-content: center;
+    align-items: center;
+    background: #e7e7e7;
+  }
+
+  .win11-window {
+    width: 340px;
+    border-radius: 12px;
+    background: #ffffffcc;
+    backdrop-filter: blur(15px);
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.1),
+      0 8px 20px rgba(0,0,0,0.15);
+    overflow: hidden;
+    border: 1px solid #d0d0d0;
+    font-size: 14px;
+  }
+
+  .win11-titlebar {
+    height: 32px;
+    background: linear-gradient(to right, #f8f8f8, #fdfdfd);
+    border-bottom: 1px solid #d4d4d4;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 0 12px;
+    color: #222;
+    font-weight: 500;
+  }
+
+  .title-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
+  .title-button {
+    width: 36px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    color: #555;
+  }
+
+  .title-button:hover {
+    background: rgba(0,0,0,0.07);
+  }
+
+  .title-button.close:hover {
+    background: #e81123;
+    color: #fff;
+  }
+
+  .win11-body {
+    padding: 20px 24px;
+    color: #000;
+    text-align: left;
+    min-height: 60px;
+    display: flex;
     align-items: center;
   }
 
-  .messagebox {
-    width: 300px;
-    background: #fefefe;
-    border: 1px solid #aaa;
-    border-radius: 8px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-    overflow: hidden;
+  .win11-footer {
+    padding: 12px;
+    background: #f3f3f3;
+    border-top: 1px solid #dcdcdc;
+    text-align: right;
   }
 
-  .messagebox-header {
-    background: #0078d4;
-    color: white;
-    padding: 8px;
-    font-weight: bold;
-  }
-
-  .messagebox-body {
-    padding: 20px;
-    text-align: center;
-    min-height: 50px;
-  }
-
-  .messagebox-footer {
-    text-align: center;
-    background: #f1f1f1;
-    padding: 8px;
-  }
-
-  .msg-button {
+  .win11-btn {
     background: #0078d4;
     color: white;
     border: none;
-    padding: 6px 16px;
-    border-radius: 4px;
-    margin: 0 4px;
+    padding: 6px 18px;
+    border-radius: 6px;
+    margin-left: 8px;
+    font-size: 13px;
     cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   }
 
-  .msg-button:hover {
-    background: #005a9e;
+  .win11-btn:hover {
+    background: #0062a3;
   }
 
-  /* Command output */
+  /* Right: Generated PowerShell command */
   #command {
     width: 30%;
     background: #1e1e1e;
     color: #dcdcdc;
     padding: 20px;
     font-family: Consolas, monospace;
-    white-space: pre-wrap;
     border-left: 1px solid #444;
     overflow-y: auto;
+    white-space: pre-wrap; /* wrap long lines */
+    word-wrap: break-word;
   }
 
   #command h3 {
     color: #9cdcfe;
+    margin-top: 0;
+  }
+
+  #cmdOutput {
+    line-height: 1.5;
   }
 </style>
 </head>
 <body>
 
-  <!-- LEFT: Input Fields -->
+  <!-- LEFT SIDEBAR -->
   <div id="builder">
     <h2>MessageBox Parameters</h2>
 
@@ -155,19 +205,26 @@
     <label><input type="checkbox" id="topMost"> Show as TopMost</label>
   </div>
 
-  <!-- CENTER: Preview -->
+  <!-- CENTER PREVIEW -->
   <div id="preview">
-    <div class="messagebox" id="msgPreview">
-      <div class="messagebox-header" id="msgCaption">Caption</div>
-      <div class="messagebox-body" id="msgBody">Message text here</div>
-      <div class="messagebox-footer" id="msgButtons"></div>
+    <div class="win11-window" id="msgPreview">
+      <div class="win11-titlebar">
+        <div id="msgCaption">Caption</div>
+        <div class="title-buttons">
+          <div class="title-button">─</div>
+          <div class="title-button">□</div>
+          <div class="title-button close">×</div>
+        </div>
+      </div>
+      <div class="win11-body" id="msgBody">Message text here</div>
+      <div class="win11-footer" id="msgButtons"></div>
     </div>
   </div>
 
-  <!-- RIGHT: Generated Command -->
+  <!-- RIGHT COMMAND OUTPUT -->
   <div id="command">
     <h3>Generated PowerShell Command</h3>
-    <pre id="cmdOutput">[System.Windows.Forms.MessageBox]::Show("Message text here","Caption","OK","None","Button1")</pre>
+    <pre id="cmdOutput"></pre>
   </div>
 
 <script>
@@ -178,7 +235,6 @@ const iconSelect = document.getElementById('icon');
 const defaultButtonSelect = document.getElementById('defaultButton');
 const topMostCheck = document.getElementById('topMost');
 const cmdOutput = document.getElementById('cmdOutput');
-
 const msgCaption = document.getElementById('msgCaption');
 const msgBody = document.getElementById('msgBody');
 const msgButtons = document.getElementById('msgButtons');
@@ -194,7 +250,6 @@ function updatePreviewAndCommand() {
   msgCaption.textContent = caption;
   msgBody.textContent = text;
 
-  // Simulate buttons
   const buttonSets = {
     OK: ["OK"],
     OKCancel: ["OK", "Cancel"],
@@ -208,17 +263,16 @@ function updatePreviewAndCommand() {
   buttonSets[buttons].forEach(b => {
     const btn = document.createElement('button');
     btn.textContent = b;
-    btn.className = 'msg-button';
+    btn.className = 'win11-btn';
     msgButtons.appendChild(btn);
   });
 
-  // Generate command
   let cmd = `[System.Windows.Forms.MessageBox]::Show(`;
   cmd += `"${text.replace(/"/g, '`"')}", `;
   cmd += `"${caption.replace(/"/g, '`"')}", `;
-  cmd += `"[System.Windows.Forms.MessageBoxButtons]::${buttons}", `;
-  cmd += `"[System.Windows.Forms.MessageBoxIcon]::${icon}", `;
-  cmd += `"[System.Windows.Forms.MessageBoxDefaultButton]::${defaultButton}"`;
+  cmd += `[System.Windows.Forms.MessageBoxButtons]::${buttons}, `;
+  cmd += `[System.Windows.Forms.MessageBoxIcon]::${icon}, `;
+  cmd += `[System.Windows.Forms.MessageBoxDefaultButton]::${defaultButton}`;
   if (topMost) cmd += `, [System.Windows.Forms.MessageBoxOptions]::ServiceNotification`;
   cmd += `)`;
 
