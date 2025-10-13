@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PowerShell MessageBox.Show Builder</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Segoe UI, sans-serif;
+    background-color: #f5f6fa;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sidebar styles */
+  #builder {
+    width: 30%;
+    background: #fff;
+    border-right: 1px solid #ccc;
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  #builder h2 {
+    margin-top: 0;
+  }
+
+  label {
+    display: block;
+    margin-top: 10px;
+    font-weight: 600;
+  }
+
+  input[type="text"], select {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  input[type="checkbox"] {
+    margin-right: 6px;
+  }
+
+  /* Preview styles */
+  #preview {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .messagebox {
+    width: 300px;
+    background: #fefefe;
+    border: 1px solid #aaa;
+    border-radius: 8px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+
+  .messagebox-header {
+    background: #0078d4;
+    color: white;
+    padding: 8px;
+    font-weight: bold;
+  }
+
+  .messagebox-body {
+    padding: 20px;
+    text-align: center;
+    min-height: 50px;
+  }
+
+  .messagebox-footer {
+    text-align: center;
+    background: #f1f1f1;
+    padding: 8px;
+  }
+
+  .msg-button {
+    background: #0078d4;
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 4px;
+    margin: 0 4px;
+    cursor: pointer;
+  }
+
+  .msg-button:hover {
+    background: #005a9e;
+  }
+
+  /* Command output */
+  #command {
+    width: 30%;
+    background: #1e1e1e;
+    color: #dcdcdc;
+    padding: 20px;
+    font-family: Consolas, monospace;
+    white-space: pre-wrap;
+    border-left: 1px solid #444;
+    overflow-y: auto;
+  }
+
+  #command h3 {
+    color: #9cdcfe;
+  }
+</style>
+</head>
+<body>
+
+  <!-- LEFT: Input Fields -->
+  <div id="builder">
+    <h2>MessageBox Parameters</h2>
+
+    <label>Text (Message)</label>
+    <input type="text" id="text" placeholder="Enter message text">
+
+    <label>Caption</label>
+    <input type="text" id="caption" placeholder="Enter window title">
+
+    <label>Buttons</label>
+    <select id="buttons">
+      <option>OK</option>
+      <option>OKCancel</option>
+      <option>YesNo</option>
+      <option>YesNoCancel</option>
+      <option>RetryCancel</option>
+      <option>AbortRetryIgnore</option>
+    </select>
+
+    <label>Icon</label>
+    <select id="icon">
+      <option>None</option>
+      <option>Information</option>
+      <option>Warning</option>
+      <option>Error</option>
+      <option>Question</option>
+    </select>
+
+    <label>Default Button</label>
+    <select id="defaultButton">
+      <option>Button1</option>
+      <option>Button2</option>
+      <option>Button3</option>
+    </select>
+
+    <label><input type="checkbox" id="topMost"> Show as TopMost</label>
+  </div>
+
+  <!-- CENTER: Preview -->
+  <div id="preview">
+    <div class="messagebox" id="msgPreview">
+      <div class="messagebox-header" id="msgCaption">Caption</div>
+      <div class="messagebox-body" id="msgBody">Message text here</div>
+      <div class="messagebox-footer" id="msgButtons"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Generated Command -->
+  <div id="command">
+    <h3>Generated PowerShell Command</h3>
+    <pre id="cmdOutput">[System.Windows.Forms.MessageBox]::Show("Message text here","Caption","OK","None","Button1")</pre>
+  </div>
+
+<script>
+const textInput = document.getElementById('text');
+const captionInput = document.getElementById('caption');
+const buttonsSelect = document.getElementById('buttons');
+const iconSelect = document.getElementById('icon');
+const defaultButtonSelect = document.getElementById('defaultButton');
+const topMostCheck = document.getElementById('topMost');
+const cmdOutput = document.getElementById('cmdOutput');
+
+const msgCaption = document.getElementById('msgCaption');
+const msgBody = document.getElementById('msgBody');
+const msgButtons = document.getElementById('msgButtons');
+
+function updatePreviewAndCommand() {
+  const text = textInput.value || "Message text here";
+  const caption = captionInput.value || "Caption";
+  const buttons = buttonsSelect.value;
+  const icon = iconSelect.value;
+  const defaultButton = defaultButtonSelect.value;
+  const topMost = topMostCheck.checked;
+
+  msgCaption.textContent = caption;
+  msgBody.textContent = text;
+
+  // Simulate buttons
+  const buttonSets = {
+    OK: ["OK"],
+    OKCancel: ["OK", "Cancel"],
+    YesNo: ["Yes", "No"],
+    YesNoCancel: ["Yes", "No", "Cancel"],
+    RetryCancel: ["Retry", "Cancel"],
+    AbortRetryIgnore: ["Abort", "Retry", "Ignore"]
+  };
+
+  msgButtons.innerHTML = "";
+  buttonSets[buttons].forEach(b => {
+    const btn = document.createElement('button');
+    btn.textContent = b;
+    btn.className = 'msg-button';
+    msgButtons.appendChild(btn);
+  });
+
+  // Generate command
+  let cmd = `[System.Windows.Forms.MessageBox]::Show(`;
+  cmd += `"${text.replace(/"/g, '`"')}", `;
+  cmd += `"${caption.replace(/"/g, '`"')}", `;
+  cmd += `"[System.Windows.Forms.MessageBoxButtons]::${buttons}", `;
+  cmd += `"[System.Windows.Forms.MessageBoxIcon]::${icon}", `;
+  cmd += `"[System.Windows.Forms.MessageBoxDefaultButton]::${defaultButton}"`;
+  if (topMost) cmd += `, [System.Windows.Forms.MessageBoxOptions]::ServiceNotification`;
+  cmd += `)`;
+
+  cmdOutput.textContent = cmd;
+}
+
+document.querySelectorAll('#builder input, #builder select').forEach(el => {
+  el.addEventListener('input', updatePreviewAndCommand);
+  el.addEventListener('change', updatePreviewAndCommand);
+});
+
+updatePreviewAndCommand();
+</script>
+
+</body>
+</html>
