@@ -1,256 +1,321 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PowerShell MessageBox.Show Builder</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PowerShell MessageBox.Show Builder — Win11 Preview</title>
 <style>
-  body {
-    margin: 0;
-    font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
-    background-color: #f3f3f3;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
+  :root{
+    --bg:#f3f3f3;
+    --panel-bg: rgba(255,255,255,0.9);
+    --muted:#6b6b6b;
+    --accent:#0078d4;
+    --win-border:#d0d0d0;
+    --cmd-bg:#1e1e1e;
   }
 
-  /* Left: Input fields */
-  #builder {
-    width: 28%;
-    background: #ffffffcc;
+  html,body{
+    height:100%;
+    margin:0;
+    font-family: "Segoe UI Variable Display", "Segoe UI", Roboto, system-ui, -apple-system, "Noto Sans", "Helvetica Neue", Arial;
+    background:var(--bg);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  .app {
+    display:flex;
+    height:100vh;
+    overflow:hidden;
+  }
+
+  /* LEFT: builder */
+  #builder{
+    width:28%;
+    min-width:260px;
+    padding:20px;
+    background:var(--panel-bg);
+    border-right:1px solid rgba(0,0,0,0.06);
+    overflow:auto;
+    box-sizing:border-box;
     backdrop-filter: blur(8px);
-    border-right: 1px solid #ccc;
-    padding: 20px;
-    overflow-y: auto;
   }
 
-  #builder h2 {
-    margin-top: 0;
-    font-weight: 600;
-    color: #1e1e1e;
+  #builder h2{
+    margin:0 0 12px 0;
+    font-weight:600;
   }
 
-  label {
-    display: block;
-    margin-top: 10px;
-    font-weight: 500;
+  label{ display:block; margin-top:12px; font-weight:500; color:#222; }
+  input[type="text"], select{
+    width:100%;
+    padding:8px 10px;
+    margin-top:6px;
+    border-radius:8px;
+    border:1px solid #d6d6d6;
+    background:#fbfbfb;
+    box-sizing:border-box;
+    font-size:14px;
+  }
+  .checkbox-row{ margin-top:12px; display:flex; align-items:center; gap:8px; color:#222; }
+  input[type="checkbox"]{ width:16px; height:16px; }
+
+  /* CENTER: Win11 preview */
+  #preview{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    box-sizing:border-box;
   }
 
-  input[type="text"], select {
-    width: 100%;
-    padding: 8px;
-    margin-top: 4px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    background-color: #fafafa;
-  }
-
-  input[type="checkbox"] {
-    margin-right: 6px;
-  }
-
-  /* Center: Windows 11 message box preview */
-  #preview {
-    flex-grow: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #e7e7e7;
-  }
-
-  .win11-window {
-    width: 340px;
-    border-radius: 12px;
-    background: #ffffffcc;
-    backdrop-filter: blur(15px);
+  .win11-window{
+    width:360px;
+    border-radius:12px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(14px);
     box-shadow:
-      0 1px 2px rgba(0,0,0,0.1),
-      0 8px 20px rgba(0,0,0,0.15);
-    overflow: hidden;
-    border: 1px solid #d0d0d0;
-    font-size: 14px;
+      0 1px 2px rgba(0,0,0,0.06),
+      0 8px 26px rgba(0,0,0,0.14);
+    border:1px solid var(--win-border);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
   }
 
-  .win11-titlebar {
-    height: 32px;
-    background: linear-gradient(to right, #f8f8f8, #fdfdfd);
-    border-bottom: 1px solid #d4d4d4;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 8px 0 12px;
-    color: #222;
-    font-weight: 500;
+  .win11-titlebar{
+    height:34px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 10px;
+    border-bottom:1px solid rgba(0,0,0,0.04);
+    background: linear-gradient(180deg,#fafafa,#ffffff);
+  }
+  .title-left{ font-weight:600; color:#111; font-size:13px; display:flex; align-items:center; gap:10px; }
+  .title-right{ display:flex; gap:6px; align-items:center; }
+  .title-btn {
+    width:36px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:default; color:#444;
+  }
+  .title-btn:hover{ background:rgba(0,0,0,0.06); }
+  .title-btn.close:hover{ background:#e81123; color:#fff; }
+
+  .win11-body{
+    display:flex;
+    gap:14px;
+    padding:18px 20px;
+    align-items:flex-start;
+    min-height:86px;
   }
 
-  .title-buttons {
-    display: flex;
-    gap: 4px;
+  .icon-box{
+    width:48px; height:48px; flex:0 0 48px; display:flex; align-items:center; justify-content:center; border-radius:8px;
   }
 
-  .title-button {
-    width: 36px;
-    height: 28px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: default;
-    color: #555;
+  .msg-text{
+    flex:1; color:#111; font-size:14px; line-height:1.45;
+    word-break: break-word; /* allow long text to wrap nicely */
   }
 
-  .title-button:hover {
-    background: rgba(0,0,0,0.07);
+  .win11-footer{
+    padding:12px 14px;
+    background:linear-gradient(180deg,#fbfbfb,#f2f2f2);
+    border-top:1px solid rgba(0,0,0,0.04);
+    text-align:right;
   }
 
-  .title-button.close:hover {
-    background: #e81123;
-    color: #fff;
+  .win11-btn{
+    display:inline-block;
+    font-size:13px;
+    padding:7px 16px;
+    border-radius:8px;
+    border:0;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    margin-left:8px;
+  }
+  .win11-btn.secondary{
+    background:transparent;
+    color:#222;
+    border:1px solid rgba(0,0,0,0.06);
   }
 
-  .win11-body {
-    padding: 20px 24px;
-    color: #000;
-    text-align: left;
-    min-height: 60px;
-    display: flex;
-    align-items: center;
+  /* RIGHT: command */
+  #command{
+    width:30%;
+    min-width:300px;
+    background:var(--cmd-bg);
+    color:#dcdcdc;
+    padding:20px;
+    box-sizing:border-box;
+    border-left:1px solid rgba(255,255,255,0.04);
+    overflow:auto;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
   }
 
-  .win11-footer {
-    padding: 12px;
-    background: #f3f3f3;
-    border-top: 1px solid #dcdcdc;
-    text-align: right;
+  #command h3{ color:#9cdcfe; margin:0; font-weight:600; }
+  .code-wrap{
+    background:transparent;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.04);
+    font-family: Consolas, "Courier New", monospace;
+    font-size:13px;
+    line-height:1.45;
+    /* WRAPPING rules */
+    white-space: pre-wrap;     /* Preserve line breaks, but allow wrapping */
+    word-wrap: break-word;     /* break long words if needed */
+    overflow-wrap: anywhere;   /* allow breaking at arbitrary points when necessary */
+    word-break: break-word;    /* fallback */
+    hyphens: auto;
+    color: #e6e6e6;
   }
 
-  .win11-btn {
-    background: #0078d4;
-    color: white;
-    border: none;
-    padding: 6px 18px;
-    border-radius: 6px;
-    margin-left: 8px;
-    font-size: 13px;
-    cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  /* Make sure extremely long strings don't produce horizontal scroll */
+  .code-wrap { overflow-x: hidden; }
+
+  /* small responsive adjustments */
+  @media (max-width: 980px){
+    #builder{ width:32%; }
+    #command{ width:36%; }
+    .win11-window{ width:320px; }
   }
 
-  .win11-btn:hover {
-    background: #0062a3;
-  }
-
-  /* Right: Generated PowerShell command */
-  #command {
-    width: 30%;
-    background: #1e1e1e;
-    color: #dcdcdc;
-    padding: 20px;
-    font-family: Consolas, monospace;
-    border-left: 1px solid #444;
-    overflow-y: auto;
-    white-space: pre-wrap; /* wrap long lines */
-    word-wrap: break-word;
-  }
-
-  #command h3 {
-    color: #9cdcfe;
-    margin-top: 0;
-  }
-
-  #cmdOutput {
-    line-height: 1.5;
+  @media (max-width: 720px){
+    .app{ flex-direction:column; }
+    #builder, #command { width:100%; height:210px; }
+    #preview { flex:1; padding:12px; }
+    .win11-window{ width:100%; max-width:800px; }
   }
 </style>
 </head>
 <body>
+  <div class="app">
+    <!-- LEFT -->
+    <div id="builder">
+      <h2>MessageBox Parameters</h2>
 
-  <!-- LEFT SIDEBAR -->
-  <div id="builder">
-    <h2>MessageBox Parameters</h2>
+      <label for="text">Text (Message)</label>
+      <input id="text" type="text" placeholder="Enter message text" value="Message text here">
 
-    <label>Text (Message)</label>
-    <input type="text" id="text" placeholder="Enter message text">
+      <label for="caption">Caption</label>
+      <input id="caption" type="text" placeholder="Enter window title" value="Caption">
 
-    <label>Caption</label>
-    <input type="text" id="caption" placeholder="Enter window title">
+      <label for="buttons">Buttons</label>
+      <select id="buttons">
+        <option>OK</option>
+        <option>OKCancel</option>
+        <option>YesNo</option>
+        <option>YesNoCancel</option>
+        <option>RetryCancel</option>
+        <option>AbortRetryIgnore</option>
+      </select>
 
-    <label>Buttons</label>
-    <select id="buttons">
-      <option>OK</option>
-      <option>OKCancel</option>
-      <option>YesNo</option>
-      <option>YesNoCancel</option>
-      <option>RetryCancel</option>
-      <option>AbortRetryIgnore</option>
-    </select>
+      <label for="icon">Icon</label>
+      <select id="icon">
+        <option value="None">None</option>
+        <option value="Information">Information</option>
+        <option value="Warning">Warning</option>
+        <option value="Error">Error</option>
+        <option value="Question">Question</option>
+      </select>
 
-    <label>Icon</label>
-    <select id="icon">
-      <option>None</option>
-      <option>Information</option>
-      <option>Warning</option>
-      <option>Error</option>
-      <option>Question</option>
-    </select>
+      <label for="defaultButton">Default Button</label>
+      <select id="defaultButton">
+        <option>Button1</option>
+        <option>Button2</option>
+        <option>Button3</option>
+      </select>
 
-    <label>Default Button</label>
-    <select id="defaultButton">
-      <option>Button1</option>
-      <option>Button2</option>
-      <option>Button3</option>
-    </select>
+      <div class="checkbox-row">
+        <input id="topMost" type="checkbox">
+        <label for="topMost" style="margin:0; font-weight:500;">Show as TopMost</label>
+      </div>
+    </div>
 
-    <label><input type="checkbox" id="topMost"> Show as TopMost</label>
-  </div>
+    <!-- CENTER PREVIEW -->
+    <div id="preview">
+      <div class="win11-window" role="dialog" aria-labelledby="msgCaption" aria-describedby="msgBody">
+        <div class="win11-titlebar">
+          <div class="title-left"><span id="msgCaption">Caption</span></div>
+          <div class="title-right">
+            <div class="title-btn" title="Minimize">─</div>
+            <div class="title-btn" title="Maximize">□</div>
+            <div class="title-btn close" title="Close">×</div>
+          </div>
+        </div>
 
-  <!-- CENTER PREVIEW -->
-  <div id="preview">
-    <div class="win11-window" id="msgPreview">
-      <div class="win11-titlebar">
-        <div id="msgCaption">Caption</div>
-        <div class="title-buttons">
-          <div class="title-button">─</div>
-          <div class="title-button">□</div>
-          <div class="title-button close">×</div>
+        <div class="win11-body">
+          <div class="icon-box" id="iconBox" aria-hidden="true"></div>
+          <div class="msg-text" id="msgBody">Message text here</div>
+        </div>
+
+        <div class="win11-footer" id="msgButtons">
+          <!-- Buttons inserted dynamically -->
         </div>
       </div>
-      <div class="win11-body" id="msgBody">Message text here</div>
-      <div class="win11-footer" id="msgButtons"></div>
+    </div>
+
+    <!-- RIGHT: generated code -->
+    <div id="command">
+      <h3>Generated PowerShell Command</h3>
+      <div class="code-wrap" id="cmdOutput" spellcheck="false" contenteditable="false"></div>
+      <div style="display:flex; gap:8px;">
+        <button id="copyBtn" style="cursor:pointer;padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;">Copy</button>
+        <button id="multiLineBtn" style="cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#fff;">Show as multi-line</button>
+      </div>
     </div>
   </div>
 
-  <!-- RIGHT COMMAND OUTPUT -->
-  <div id="command">
-    <h3>Generated PowerShell Command</h3>
-    <pre id="cmdOutput"></pre>
-  </div>
-
 <script>
-const textInput = document.getElementById('text');
-const captionInput = document.getElementById('caption');
-const buttonsSelect = document.getElementById('buttons');
-const iconSelect = document.getElementById('icon');
-const defaultButtonSelect = document.getElementById('defaultButton');
-const topMostCheck = document.getElementById('topMost');
-const cmdOutput = document.getElementById('cmdOutput');
-const msgCaption = document.getElementById('msgCaption');
-const msgBody = document.getElementById('msgBody');
-const msgButtons = document.getElementById('msgButtons');
+  // DOM refs
+  const textInput = document.getElementById('text');
+  const captionInput = document.getElementById('caption');
+  const buttonsSelect = document.getElementById('buttons');
+  const iconSelect = document.getElementById('icon');
+  const defaultButtonSelect = document.getElementById('defaultButton');
+  const topMostCheck = document.getElementById('topMost');
 
-function updatePreviewAndCommand() {
-  const text = textInput.value || "Message text here";
-  const caption = captionInput.value || "Caption";
-  const buttons = buttonsSelect.value;
-  const icon = iconSelect.value;
-  const defaultButton = defaultButtonSelect.value;
-  const topMost = topMostCheck.checked;
+  const msgCaption = document.getElementById('msgCaption');
+  const msgBody = document.getElementById('msgBody');
+  const msgButtons = document.getElementById('msgButtons');
+  const iconBox = document.getElementById('iconBox');
 
-  msgCaption.textContent = caption;
-  msgBody.textContent = text;
+  const cmdOutput = document.getElementById('cmdOutput');
+  const copyBtn = document.getElementById('copyBtn');
+  const multiLineBtn = document.getElementById('multiLineBtn');
 
-  const buttonSets = {
+  // Icon SVGs (simple Win-like glyphs)
+  const ICONS = {
+    None: '',
+    Information: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="#DDEEFF"></circle>
+      <path d="M12 8.5V9" stroke="#1E5BB6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M11.25 11.5h1.5v4h-1.5z" fill="#1E5BB6"/>
+    </svg>`,
+    Warning: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M11.998 3.5L2 20.5h19.996L11.998 3.5z" fill="#FFF4CE"></path>
+      <path d="M12 8.5v3" stroke="#7A5900" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M12 14.2h.01" stroke="#7A5900" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`,
+    Error: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="#FFECEC"></circle>
+      <path d="M15.5 8.5L8.5 15.5M8.5 8.5l7 7" stroke="#B50F0F" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`,
+    Question: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="#EEF6FF"></circle>
+      <path d="M9.6 9.6c.5-.9 1.3-1.4 2.6-1.4 1.8 0 2.5 1.1 2.5 2.2 0 1.6-1 2-1.9 2.9-.7.7-.7 1.3-.6 1.8" stroke="#125FAD" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 17h.01" stroke="#125FAD" stroke-width="1.7" stroke-linecap="round"/>
+    </svg>`
+  };
+
+  // Buttons sets mapping
+  const BUTTON_SETS = {
     OK: ["OK"],
     OKCancel: ["OK", "Cancel"],
     YesNo: ["Yes", "No"],
@@ -259,33 +324,121 @@ function updatePreviewAndCommand() {
     AbortRetryIgnore: ["Abort", "Retry", "Ignore"]
   };
 
-  msgButtons.innerHTML = "";
-  buttonSets[buttons].forEach(b => {
-    const btn = document.createElement('button');
-    btn.textContent = b;
-    btn.className = 'win11-btn';
-    msgButtons.appendChild(btn);
+  // Whether to show a multi-line (split) command for readability
+  let showMultiLine = false;
+
+  function escapeForPSS(str){
+    // Replace double quotes with backtick-quote for PowerShell string literal within double quotes
+    return str.replace(/"/g, '`"');
+  }
+
+  function buildSingleLineCommand(params){
+    // single line command already used previously
+    let parts = [];
+    parts.push(`[System.Windows.Forms.MessageBox]::Show(`);
+    parts.push(`"${escapeForPSS(params.text)}", `);
+    parts.push(`"${escapeForPSS(params.caption)}", `);
+    parts.push(`[System.Windows.Forms.MessageBoxButtons]::${params.buttons}, `);
+    parts.push(`[System.Windows.Forms.MessageBoxIcon]::${params.icon}, `);
+    parts.push(`[System.Windows.Forms.MessageBoxDefaultButton]::${params.defaultButton}`);
+    if(params.topMost){
+      parts.push(`, [System.Windows.Forms.MessageBoxOptions]::ServiceNotification`);
+    }
+    parts.push(`)`);
+    return parts.join('');
+  }
+
+  function buildMultiLineCommand(params){
+    // split onto multiple indented lines for readability
+    const lines = [];
+    lines.push(`[System.Windows.Forms.MessageBox]::Show(`);
+    lines.push(`  "${escapeForPSS(params.text)}",`);
+    lines.push(`  "${escapeForPSS(params.caption)}",`);
+    lines.push(`  [System.Windows.Forms.MessageBoxButtons]::${params.buttons},`);
+    lines.push(`  [System.Windows.Forms.MessageBoxIcon]::${params.icon},`);
+    lines.push(`  [System.Windows.Forms.MessageBoxDefaultButton]::${params.defaultButton}${params.topMost ? ',' : ''}`);
+    if(params.topMost){
+      lines.push(`  [System.Windows.Forms.MessageBoxOptions]::ServiceNotification`);
+    }
+    lines.push(`)`);
+    return lines.join('\n');
+  }
+
+  function updatePreviewAndCommand(){
+    const text = textInput.value.trim() || "Message text here";
+    const caption = captionInput.value.trim() || "Caption";
+    const buttons = buttonsSelect.value || "OK";
+    const icon = iconSelect.value || "None";
+    const defaultButton = defaultButtonSelect.value || "Button1";
+    const topMost = topMostCheck.checked;
+
+    // Update preview text & title
+    msgCaption.textContent = caption;
+    msgBody.textContent = text;
+
+    // Update icon rendering
+    if(icon && icon !== 'None' && ICONS[icon]){
+      iconBox.innerHTML = ICONS[icon];
+      iconBox.style.display = 'flex';
+    } else {
+      iconBox.innerHTML = '';
+      iconBox.style.display = 'none';
+    }
+
+    // Render buttons
+    msgButtons.innerHTML = '';
+    const set = BUTTON_SETS[buttons] || BUTTON_SETS.OK;
+    // add a left filler to align buttons right (Windows messageboxes typically have buttons on the right)
+    const frag = document.createDocumentFragment();
+    set.forEach((b, idx) => {
+      const btn = document.createElement('button');
+      btn.textContent = b;
+      btn.className = 'win11-btn' + (idx === 0 && set.length > 1 ? ' secondary' : ''); // primary/secondary simple heuristic
+      frag.appendChild(btn);
+    });
+    msgButtons.appendChild(frag);
+
+    // Build command text
+    const params = { text, caption, buttons, icon, defaultButton, topMost };
+    const cmd = showMultiLine ? buildMultiLineCommand(params) : buildSingleLineCommand(params);
+    // Put command into code area
+    cmdOutput.textContent = cmd;
+  }
+
+  // Hook events
+  const inputs = [textInput, captionInput, buttonsSelect, iconSelect, defaultButtonSelect, topMostCheck];
+  inputs.forEach(i => {
+    i.addEventListener('input', updatePreviewAndCommand);
+    i.addEventListener('change', updatePreviewAndCommand);
   });
 
-  let cmd = `[System.Windows.Forms.MessageBox]::Show(`;
-  cmd += `"${text.replace(/"/g, '`"')}", `;
-  cmd += `"${caption.replace(/"/g, '`"')}", `;
-  cmd += `[System.Windows.Forms.MessageBoxButtons]::${buttons}, `;
-  cmd += `[System.Windows.Forms.MessageBoxIcon]::${icon}, `;
-  cmd += `[System.Windows.Forms.MessageBoxDefaultButton]::${defaultButton}`;
-  if (topMost) cmd += `, [System.Windows.Forms.MessageBoxOptions]::ServiceNotification`;
-  cmd += `)`;
+  // Copy button
+  copyBtn.addEventListener('click', () => {
+    const text = cmdOutput.textContent;
+    navigator.clipboard?.writeText(text).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1400);
+    }, () => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); copyBtn.textContent = 'Copied!'; } catch(e){ alert('Copy failed'); }
+      ta.remove();
+      setTimeout(() => copyBtn.textContent = 'Copy', 1400);
+    });
+  });
 
-  cmdOutput.textContent = cmd;
-}
+  // Toggle multi-line
+  multiLineBtn.addEventListener('click', () => {
+    showMultiLine = !showMultiLine;
+    multiLineBtn.textContent = showMultiLine ? 'Show single-line' : 'Show as multi-line';
+    updatePreviewAndCommand();
+  });
 
-document.querySelectorAll('#builder input, #builder select').forEach(el => {
-  el.addEventListener('input', updatePreviewAndCommand);
-  el.addEventListener('change', updatePreviewAndCommand);
-});
-
-updatePreviewAndCommand();
+  // initialize
+  updatePreviewAndCommand();
 </script>
-
 </body>
 </html>
