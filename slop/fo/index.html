@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Isometric Turn-Based RPG — Prototype</title>
+<style>
+  :root{
+    --bg:#0b0b0f; --panel:#0f1720; --accent:#e0c08c;
+    --ui-text:#dfe7ee;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071018,#07111a);color:var(--ui-text);font-family:Inter,Segoe UI,Arial,sans-serif;}
+  #app{display:flex;gap:12px;padding:12px;height:100%;box-sizing:border-box;}
+  #game-wrap{flex:1;display:flex;align-items:center;justify-content:center;}
+  canvas{background:linear-gradient(180deg,#1b2430,#0b1116);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:block;}
+  #ui{width:340px;background:linear-gradient(180deg,var(--panel),#08101a);border-radius:8px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:10px}
+  h1{font-size:18px;margin:0 0 6px 0;color:var(--accent)}
+  .stat{display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:6px}
+  #log{height:160px;overflow:auto;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px}
+  button{background:#113; color:var(--ui-text); border:1px solid rgba(255,255,255,0.04); padding:8px;border-radius:6px;cursor:pointer}
+  .muted{color:#9aa6b2;font-size:13px}
+  .controls{display:flex;gap:6px;flex-wrap:wrap}
+  .tile-legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .legend-item{display:flex;gap:6px;align-items:center;font-size:13px}
+  img.thumb{width:28px;height:28px;border-radius:4px;image-rendering:pixelated;border:1px solid rgba(0,0,0,0.3)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="game-wrap">
+    <canvas id="game" width="960" height="640"></canvas>
+  </div>
+  <div id="ui">
+    <h1>Vault-like IsoRPG (Prototype)</h1>
+    <div class="stat"><div><strong>Turn:</strong> <span id="turnLabel">Player</span></div><div id="turnCounter">0</div></div>
+    <div class="stat"><div><strong>HP</strong></div><div id="hpLabel">--</div></div>
+    <div class="stat"><div><strong>AP</strong></div><div id="apLabel">--</div></div>
+
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="endTurnBtn">End Turn</button>
+      <div class="muted">Use arrow keys or click a tile to move. Space to attack adjacent enemy.</div>
+    </div>
+
+    <div>
+      <div style="font-weight:600;margin-bottom:6px">Inventory</div>
+      <div id="inventory" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+
+    <div>
+      <div style="font-weight:600;margin-bottom:6px">Game Log</div>
+      <div id="log"></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="tile-legend" id="legend"></div>
+      <div style="text-align:right">
+        <div class="muted">Prototype — original assets generated at runtime</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Isometric Turn-Based RPG Prototype
+  - Generates procedural pixel-art sprites on offscreen canvases
+    and converts them to base64 data URLs. These are used as
+    Image objects for drawing tiles and sprites.
+  - Implements a small map, player, and simple AI enemies.
+  - Turn-based: player has AP (action points) to move/attack.
+*/
+
+// --------------------- Utilities ---------------------
+const logEl = document.getElementById('log');
+function log(text){
+  const p = document.createElement('div'); p.textContent = text; logEl.prepend(p);
+}
+
+// clamp
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+// --------------------- Asset Generation ---------------------
+/*
+  createSprite(name, drawFn, size)
+  - drawFn receives (ctx, size) and should draw pixel-art-ish content
+  - returns a base64 data URL (PNG) created from an offscreen canvas
+*/
+function createSprite(drawFn, size=32, scale=1){
+  const s = size * scale;
+  const c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const ctx = c.getContext('2d');
+  // nearest-neighbor (pixel art)
+  ctx.imageSmoothingEnabled = false;
+  // allow drawFn to draw
+  drawFn(ctx, s);
+  // return dataURL (base64)
+  return c.toDataURL('image/png');
+}
+
+// small helper to draw pixel rectangle grid look
+function pixelRect(ctx,x,y,w,h,fill){
+  ctx.fillStyle = fill;
+  ctx.fillRect(x,y,w,h);
+}
+
+// Procedural sprites
+const ASSET_SIZES = {tile:64,char:48,icon:28};
+const ASSETS = {};
+
+// Floor tile (isometric 'dirt + cracks')
+ASSETS.floor = createSprite((ctx,s)=>{
+  ctx.fillStyle = '#3b402f';
+  ctx.fillRect(0,0,s,s);
+  // subtle noise
+  for(let i=0;i<140;i++){
+    ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.12})`;
+    ctx.fillRect(Math.random()*s,Math.random()*s,Math.random()*2+1,Math.random()*2+1);
+  }
+  // highlight center
+  const grd=ctx.createLinearGradient(0,0,0,s);
+  grd.addColorStop(0,'rgba(255,255,255,0.02)');
+  grd.addColorStop(1,'rgba(0,0,0,0.06)');
+  ctx.fillStyle=grd; ctx.fillRect(0,0,s,s);
+}, ASSET_SIZES.tile/16, 16);
+
+// Wall tile
+ASSETS.wall = createSprite((ctx,s)=>{
+  ctx.fillStyle = '#5a5146';
+  ctx.fillRect(0,0,s,s);
+  // bricks
+  ctx.fillStyle='#4a3f34';
+  const bw = Math.floor(s/6);
+  for(let y=0;y<s;y+=bw){
+    for(let x=(y/bw)%2===0?0:bw/2;x<s;x+=bw){
+      ctx.fillRect(x,y,bw-2,bw-3);
+    }
+  }
+}, ASSET_SIZES.tile/16, 16);
+
+// Player sprite (helmeted figure)
+ASSETS.player = createSprite((ctx,s)=>{
+  // background transparent
+  ctx.clearRect(0,0,s,s);
+  // body
+  const w = s*0.4, h = s*0.44;
+  ctx.fillStyle='#c9d7e6';
+  ctx.fillRect(s*0.3, s*0.36, w, h);
+  // jacket
+  ctx.fillStyle='#2e6b6b';
+  ctx.fillRect(s*0.28, s*0.36 + s*0.12, w+4, h*0.5);
+  // head
+  ctx.fillStyle='#f1c27d';
+  ctx.fillRect(s*0.37, s*0.2, s*0.26, s*0.18);
+  // helmet visor
+  ctx.fillStyle='#1f2d33';
+  ctx.fillRect(s*0.36, s*0.22, s*0.28, s*0.08);
+  // backpack
+  ctx.fillStyle='#6b4b2d';
+  ctx.fillRect(s*0.56, s*0.42, s*0.16, s*0.24);
+  // outline for pixel feel
+  ctx.strokeStyle='rgba(0,0,0,0.4)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(s*0.28,s*0.36,w+4,h);
+}, ASSET_SIZES.char/12, 12);
+
+// Enemy sprite (mutant-like)
+ASSETS.enemy = createSprite((ctx,s)=>{
+  ctx.clearRect(0,0,s,s);
+  ctx.fillStyle='#8d5e3b';
+  ctx.fillRect(s*0.28,s*0.35,s*0.44,s*0.42);
+  // head
+  ctx.fillStyle='#7a2f2f';
+  ctx.fillRect(s*0.36,s*0.18,s*0.28,s*0.18);
+  // eye
+  ctx.fillStyle='#f7f7f7';
+  ctx.fillRect(s*0.42,s*0.22,s*0.05,s*0.05);
+  ctx.fillStyle='#000';
+  ctx.fillRect(s*0.44,s*0.22,s*0.02,s*0.02);
+}, ASSET_SIZES.char/12, 12);
+
+// Item icon (stimpak)
+ASSETS.stimpak = createSprite((ctx,s)=>{
+  ctx.clearRect(0,0,s,s);
+  ctx.fillStyle='#d94141';
+  roundRect(ctx,s*0.18,s*0.2,s*0.64,s*0.5,4,true,false);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(s*0.46,s*0.33,s*0.08,s*0.24);
+  ctx.fillRect(s*0.38,s*0.43,s*0.24,s*0.08);
+}, ASSET_SIZES.icon/7, 7);
+
+// Helper: rounded rect
+function roundRect(ctx,x,y,w,h,r,fill,stroke){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  if(fill) ctx.fill();
+  if(stroke) ctx.stroke();
+}
+
+// Make small thumbnail images visible in UI legend
+function makeLegend(){
+  const legend = document.getElementById('legend');
+  const items = [
+    {img:ASSETS.floor, name:'Floor'},
+    {img:ASSETS.wall, name:'Wall'},
+    {img:ASSETS.player, name:'Player'},
+    {img:ASSETS.enemy, name:'Enemy'},
+    {img:ASSETS.stimpak, name:'Stimpak'},
+  ];
+  for(const it of items){
+    const d = document.createElement('div'); d.className='legend-item';
+    const img = document.createElement('img'); img.src=it.img; img.className='thumb';
+    d.appendChild(img);
+    const txt = document.createElement('div'); txt.textContent = it.name; txt.style.fontSize='13px';
+    d.appendChild(txt);
+    legend.appendChild(d);
+  }
+}
+makeLegend();
+
+// --------------------- Isometric Helpers ---------------------
+const TILE = {w:96, h:48}; // tile pixel size (iso diamond)
+function isoToScreen(ix,iy,offsetX,offsetY){
+  const sx = (ix - iy) * (TILE.w/2) + offsetX;
+  const sy = (ix + iy) * (TILE.h/2) + offsetY;
+  return {x:sx,y:sy};
+}
+function screenToIso(sx,sy,offsetX,offsetY){
+  const x = ((sx - offsetX) / (TILE.w/2) + (sy - offsetY) / (TILE.h/2)) / 2;
+  const y = ((sy - offsetY) / (TILE.h/2) - (sx - offsetX) / (TILE.w/2)) / 2;
+  return {x:Math.floor(x), y:Math.floor(y)};
+}
+
+// --------------------- Game World ---------------------
+const MAP_W = 12, MAP_H = 10;
+let map = [];
+function makeMap(){
+  map = Array.from({length:MAP_H},(_,y)=>Array.from({length:MAP_W},(_,x)=>{
+    // a simple room with some walls
+    const border = x===0||y===0||x===MAP_W-1||y===MAP_H-1;
+    const wall = border || (x===5 && y>2 && y<8) || (y===4 && x>2 && x<7 && Math.random()<0.6);
+    return {walkable:!wall, tile: wall ? 'wall':'floor', item: null};
+  }));
+  // place some items
+  map[2][3].item = {type:'stimpak', qty:1};
+  map[7][9].item = {type:'stimpak', qty:1};
+}
+makeMap();
+
+// Entities
+let player = {x:2,y:2,hp:18,maxHp:18,ap:6,maxAp:6,atk:4};
+let enemies = [
+  {x:8,y:4,hp:8,atk:3},
+  {x:9,y:7,hp:10,atk:3},
+];
+
+// --------------------- Canvas & Draw ---------------------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d',{alpha:false});
+ctx.imageSmoothingEnabled = false;
+
+// camera offset so center of map shows
+let camOffset = {x: canvas.width/2 - TILE.w/2, y: 60};
+
+// Images loaded from base64 data URLs
+const IMGS = {};
+function loadImagesFromAssets(){
+  for(const k in ASSETS){
+    const img = new Image();
+    img.src = ASSETS[k];
+    IMGS[k]=img;
+  }
+}
+loadImagesFromAssets();
+
+function draw(){
+  // clear
+  ctx.fillStyle = '#0a0f14';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // draw tiles sorted by iso order (y then x)
+  for(let y=0;y<MAP_H;y++){
+    for(let x=0;x<MAP_W;x++){
+      const scr = isoToScreen(x,y,camOffset.x,camOffset.y);
+      const tile = map[y][x].tile;
+      const img = IMGS[tile];
+      if(img && img.complete){
+        ctx.drawImage(img, scr.x - TILE.w/2, scr.y - TILE.h/1.1, TILE.w, TILE.h);
+      } else {
+        // fallback rectangle
+        ctx.fillStyle = tile==='wall'?'#6b5f54':'#3c3f2f';
+        ctx.fillRect(scr.x - TILE.w/2, scr.y - TILE.h/1.1, TILE.w, TILE.h);
+      }
+      // item icon if present
+      if(map[y][x].item){
+        const it = map[y][x].item;
+        const icon = IMGS[it.type];
+        if(icon && icon.complete){
+          ctx.drawImage(icon, scr.x - 14, scr.y - 10, 28, 28);
+        }
+      }
+    }
+  }
+
+  // draw entities (sorted by y for simple depth)
+  const ents = [
+    {...player, type:'player'},
+    ...enemies.map(e=>({...e,type:'enemy'}))
+  ].sort((a,b)=> (a.y+a.x) - (b.y+b.x));
+
+  for(const e of ents){
+    const scr = isoToScreen(e.x,e.y,camOffset.x,camOffset.y);
+    const img = IMGS[e.type==='player'?'player':'enemy'];
+    if(img && img.complete){
+      const w = 48, h=48;
+      ctx.drawImage(img, scr.x - w/2, scr.y - TILE.h/2 - h/2 + 6, w, h);
+    }
+    // HP bar
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(scr.x-24, scr.y - TILE.h/2 - 26, 48,6);
+    const hpPct = (e.hp || 0) / (e.maxHp || (e.type==='player'?player.maxHp:10));
+    ctx.fillStyle = 'rgba(120,200,100,0.95)';
+    ctx.fillRect(scr.x-24, scr.y - TILE.h/2 - 26, 48*hpPct, 6);
+  }
+
+  // highlight hovered tile
+  if(mouse.hover){
+    const scr = isoToScreen(mouse.hover.x, mouse.hover.y, camOffset.x, camOffset.y);
+    ctx.strokeStyle='rgba(255,255,255,0.12)';
+    ctx.lineWidth=2;
+    // diamond highlight
+    ctx.beginPath();
+    ctx.moveTo(scr.x, scr.y - TILE.h/2);
+    ctx.lineTo(scr.x + TILE.w/2, scr.y);
+    ctx.lineTo(scr.x, scr.y + TILE.h/2);
+    ctx.lineTo(scr.x - TILE.w/2, scr.y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // HUD overlays (AP circles)
+  drawHUD();
+}
+
+function drawHUD(){
+  // simple AP display near player
+  const scr = isoToScreen(player.x, player.y, camOffset.x, camOffset.y);
+  ctx.font='13px sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.95)';
+  ctx.fillText(`AP: ${player.ap}`, scr.x - 18, scr.y + 48);
+}
+
+// initial update UI
+function updateUI(){
+  document.getElementById('turnLabel').textContent = gameState.turn;
+  document.getElementById('turnCounter').textContent = turns;
+  document.getElementById('hpLabel').textContent = `${player.hp}/${player.maxHp}`;
+  document.getElementById('apLabel').textContent = `${player.ap}/${player.maxAp}`;
+
+  // inventory list
+  const inv = document.getElementById('inventory');
+  inv.innerHTML = '';
+  // gather items on player tile
+  const items = map[player.y][player.x].item ? [map[player.y][player.x].item] : [];
+  items.forEach(it=>{
+    const b = document.createElement('button');
+    b.style.display='flex'; b.style.alignItems='center'; b.style.gap='8px';
+    const img = document.createElement('img'); img.src=IMGS[it.type].src; img.width=28; img.height=28; img.style.imageRendering='pixelated';
+    b.appendChild(img);
+    b.appendChild(document.createTextNode(`${it.type} x${it.qty}`));
+    b.onclick = ()=>{
+      if(it.type==='stimpak'){
+        player.hp = Math.min(player.maxHp, player.hp + 8);
+        log('Used stimpak. +8 HP.');
+        map[player.y][player.x].item = null;
+        endPlayerTurn(true);
+      }
+      updateUI(); draw();
+    };
+    inv.appendChild(b);
+  });
+}
+
+// --------------------- Input & Game Logic ---------------------
+let mouse = {x:0,y:0,hover:null};
+canvas.addEventListener('mousemove', e=>{
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - rect.left);
+  mouse.y = (e.clientY - rect.top);
+  const iso = screenToIso(mouse.x, mouse.y, camOffset.x, camOffset.y);
+  if(iso.x>=0 && iso.y>=0 && iso.x<MAP_W && iso.y<MAP_H) mouse.hover = iso;
+  else mouse.hover = null;
+  draw();
+});
+canvas.addEventListener('click', e=>{
+  if(!mouse.hover) return;
+  const hx = mouse.hover.x, hy = mouse.hover.y;
+  // if adjacent and walkable, move; else if adjacent enemy and space used for attack require spacebar (or we can attack on click)
+  const dist = Math.abs(hx-player.x)+Math.abs(hy-player.y);
+  if(dist===1 && gameState.turn==='Player'){
+    if(enemies.findIndex(en=>en.x===hx&&en.y===hy)!==-1){
+      // attack
+      playerAttackAt(hx,hy);
+    } else {
+      attemptMovePlayer(hx,hy);
+    }
+  }
+});
+
+// keyboard
+window.addEventListener('keydown', (e)=>{
+  if(gameState.turn!=='Player') return;
+  const key = e.key;
+  const dir = {ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0]};
+  if(key in dir){
+    e.preventDefault();
+    const [dx,dy] = dir[key];
+    const nx = player.x + dx, ny = player.y + dy;
+    if(inBounds(nx,ny) && map[ny][nx].walkable){
+      attemptMovePlayer(nx,ny);
+    } else {
+      log('Blocked.');
+    }
+  } else if(key===' '){
+    // try attack any adjacent enemy
+    const enemy = enemies.find(en=>Math.abs(en.x-player.x)+Math.abs(en.y-player.y)===1);
+    if(enemy) playerAttackAt(enemy.x, enemy.y);
+    else log('No adjacent enemy to attack.');
+  } else if(key==='e' || key==='E'){
+    // interact (pick up)
+    const it = map[player.y][player.x].item;
+    if(it){
+      log(`Picked up ${it.type}.`);
+      // keep item on tile (inventory simplified)
+      // In this prototype, item stays and interaction in UI allows usage
+      updateUI();
+    } else log('Nothing here.');
+  }
+});
+
+// clickable UI
+document.getElementById('endTurnBtn').addEventListener('click', ()=>{
+  if(gameState.turn==='Player') endPlayerTurn();
+});
+
+function inBounds(x,y){ return x>=0 && y>=0 && x<MAP_W && y<MAP_H; }
+
+function attemptMovePlayer(nx,ny){
+  if(player.ap <= 0){ log('No AP left.'); return; }
+  // check tile
+  if(!map[ny][nx].walkable){ log('Cannot move there.'); return; }
+  // check enemy on tile
+  if(enemies.find(en=>en.x===nx&&en.y===ny)){ log('Enemy blocks that square.'); return; }
+  player.x = nx; player.y = ny; player.ap -= 2; log(`Moved to ${nx},${ny}. (-2 AP)`);
+  updateUI(); draw();
+  // auto end if no AP
+  if(player.ap <= 0) endPlayerTurn();
+}
+
+function playerAttackAt(x,y){
+  if(player.ap <= 0){ log('No AP to attack.'); return; }
+  const idx = enemies.findIndex(en=>en.x===x&&en.y===y);
+  if(idx===-1){ log('No enemy there.'); return; }
+  const en = enemies[idx];
+  // simple hit chance
+  const dmg = player.atk + Math.floor(Math.random()*3);
+  en.hp -= dmg;
+  player.ap -= 3;
+  log(`You hit the enemy for ${dmg} damage. (-3 AP)`);
+  if(en.hp <= 0){
+    log('Enemy dies.');
+    enemies.splice(idx,1);
+  }
+  updateUI(); draw();
+  if(player.ap <= 0) endPlayerTurn();
+}
+
+// turn flow
+let gameState = {turn:'Player'}; // 'Player' or 'Enemies'
+let turns = 0;
+function endPlayerTurn(skipLog=false){
+  if(!skipLog) log('Player ends turn.');
+  gameState.turn='Enemies';
+  updateUI();
+  setTimeout(enemyPhase, 400);
+}
+
+function enemyPhase(){
+  log('Enemies take their turn.');
+  // simple AI: each enemy moves toward player if not adjacent, else attack
+  for(const en of enemies){
+    if(en.hp <= 0) continue;
+    const dist = Math.abs(en.x-player.x)+Math.abs(en.y-player.y);
+    if(dist===1){
+      // attack
+      const dmg = en.atk + Math.floor(Math.random()*2);
+      player.hp -= dmg;
+      log(`Enemy hits you for ${dmg} damage.`);
+      if(player.hp<=0){ log('You died — game over. Refresh to restart.'); gameOver=true; draw(); updateUI(); return; }
+    } else {
+      // try to move closer
+      const dx = player.x > en.x ? 1 : (player.x < en.x ? -1:0);
+      const dy = player.y > en.y ? 1 : (player.y < en.y ? -1:0);
+      // try dx-first then dy
+      let moved=false;
+      for(const [mx,my] of [[dx,0],[0,dy]]){
+        const nx = en.x + mx, ny = en.y + my;
+        if(!moved && inBounds(nx,ny) && map[ny][nx].walkable && !entityAt(nx,ny)){
+          en.x = nx; en.y = ny; moved=true; break;
+        }
+      }
+      if(moved) log('An enemy moves.');
+    }
+  }
+  // restore player AP slightly at start of next player turn
+  turns++;
+  player.ap = player.maxAp;
+  gameState.turn='Player';
+  updateUI(); draw();
+}
+
+// check entity
+function entityAt(x,y){
+  if(player.x===x && player.y===y) return true;
+  return enemies.some(e=>e.x===x && e.y===y);
+}
+
+let gameOver = false;
+
+// initial draw & UI
+updateUI();
+draw();
+
+// simple auto-turn counter demonstrate turns progression
+log('Welcome — prototype started.');
+
+// prevent accidental selection
+canvas.onselectstart = ()=>false;
+
+</script>
+</body>
+</html>
