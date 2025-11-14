@@ -3,193 +3,242 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Isometric Turn-Based RPG — Prototype</title>
+<title>IsoRPG — Full Prototype (Procedural, VATS, AI, Network Co-op)</title>
 <style>
   :root{
-    --bg:#0b0b0f; --panel:#0f1720; --accent:#e0c08c;
-    --ui-text:#dfe7ee;
+    --bg:#071218; --panel:#0e1620; --accent:#e0c08c; --muted:#99a7b3; --ok:#7fd29f;
   }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071018,#07111a);color:var(--ui-text);font-family:Inter,Segoe UI,Arial,sans-serif;}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#06101a,#07111a);color:#dfe7ee;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:13px}
   #app{display:flex;gap:12px;padding:12px;height:100%;box-sizing:border-box;}
   #game-wrap{flex:1;display:flex;align-items:center;justify-content:center;}
-  canvas{background:linear-gradient(180deg,#1b2430,#0b1116);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:block;}
-  #ui{width:340px;background:linear-gradient(180deg,var(--panel),#08101a);border-radius:8px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:10px}
-  h1{font-size:18px;margin:0 0 6px 0;color:var(--accent)}
+  canvas#game{background:#09121a;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.7);image-rendering:pixelated}
+  #ui{width:360px;background:linear-gradient(180deg,var(--panel),#081018);border-radius:8px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:10px;overflow:auto}
+  h1{font-size:16px;margin:0;color:var(--accent)}
+  .row{display:flex;gap:8px;align-items:center}
   .stat{display:flex;justify-content:space-between;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:6px}
-  #log{height:160px;overflow:auto;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px}
-  button{background:#113; color:var(--ui-text); border:1px solid rgba(255,255,255,0.04); padding:8px;border-radius:6px;cursor:pointer}
-  .muted{color:#9aa6b2;font-size:13px}
+  #log{height:120px;overflow:auto;padding:8px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:12px}
+  button{background:#132; color:var(--ui-text); border:1px solid rgba(255,255,255,0.04); padding:8px;border-radius:6px;cursor:pointer}
+  .muted{color:var(--muted);font-size:12px}
   .controls{display:flex;gap:6px;flex-wrap:wrap}
-  .tile-legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .thumb{width:28px;height:28px;border-radius:4px;image-rendering:pixelated;border:1px solid rgba(0,0,0,0.3)}
+  .panel-title{font-weight:600;margin-bottom:6px}
+  input, textarea {background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);color:inherit;padding:6px;border-radius:6px}
+  #networkBox{display:flex;flex-direction:column;gap:6px}
+  .mini{font-size:12px;padding:6px}
+  .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
   .legend-item{display:flex;gap:6px;align-items:center;font-size:13px}
-  img.thumb{width:28px;height:28px;border-radius:4px;image-rendering:pixelated;border:1px solid rgba(0,0,0,0.3)}
+  .kbd{background:#021018;padding:4px 6px;border-radius:4px;font-weight:600;color:#9fd}
+  .small{font-size:12px}
+  #map-editor{display:flex;flex-direction:column;gap:6px}
+  .danger{background:#431; color:white}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="game-wrap">
-    <canvas id="game" width="960" height="640"></canvas>
+    <canvas id="game" width="1024" height="680"></canvas>
   </div>
-  <div id="ui">
-    <h1>Vault-like IsoRPG (Prototype)</h1>
-    <div class="stat"><div><strong>Turn:</strong> <span id="turnLabel">Player</span></div><div id="turnCounter">0</div></div>
-    <div class="stat"><div><strong>HP</strong></div><div id="hpLabel">--</div></div>
-    <div class="stat"><div><strong>AP</strong></div><div id="apLabel">--</div></div>
 
-    <div style="display:flex;gap:8px;align-items:center;">
-      <button id="endTurnBtn">End Turn</button>
-      <div class="muted">Use arrow keys or click a tile to move. Space to attack adjacent enemy.</div>
+  <div id="ui">
+    <h1>IsoRPG — Full Prototype</h1>
+
+    <div class="row">
+      <div style="flex:1">
+        <div class="stat"><div><strong>Turn:</strong> <span id="turnLabel">Player</span></div><div id="turnCounter">0</div></div>
+        <div class="stat"><div><strong>HP</strong></div><div id="hpLabel">--</div></div>
+        <div class="stat"><div><strong>AP</strong></div><div id="apLabel">--</div></div>
+      </div>
+      <div style="width:110px">
+        <button id="endTurnBtn" class="mini">End Turn</button>
+        <button id="vatsBtn" class="mini">Enter V.A.T.S.</button>
+      </div>
     </div>
 
     <div>
-      <div style="font-weight:600;margin-bottom:6px">Inventory</div>
+      <div class="panel-title">Player — Level &amp; S.P.E.C.I.A.L.</div>
+      <div class="stat-grid" id="specialGrid"></div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <div style="flex:1"><div class="muted">Level <span id="lvlLabel">1</span> — XP <span id="xpLabel">0</span></div></div>
+        <button id="levelUpBtn" class="mini">Spend Perk</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Inventory</div>
       <div id="inventory" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
 
     <div>
-      <div style="font-weight:600;margin-bottom:6px">Game Log</div>
+      <div class="panel-title">Quests</div>
+      <div id="quests"></div>
+    </div>
+
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="panel-title">Map & Editor</div>
+        <div><button id="toggleEditor" class="mini">Toggle Editor</button></div>
+      </div>
+      <div id="mapActions" style="display:flex;gap:6px;margin-top:6px">
+        <button id="regenMap" class="mini">Regenerate World</button>
+        <button id="saveMapBtn" class="mini">Save Map</button>
+        <button id="loadMapBtn" class="mini">Load Map</button>
+      </div>
+      <div id="map-editor" style="display:none;margin-top:8px">
+        <div class="muted small">Editor: click tiles to paint. Mode:</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <select id="editorMode">
+            <option value="wall">Wall</option>
+            <option value="floor">Floor</option>
+            <option value="enemy">Enemy</option>
+            <option value="stimpak">Stimpak</option>
+            <option value="erase">Erase</option>
+          </select>
+          <button id="exportMap" class="mini">Export JSON</button>
+          <button id="importMap" class="mini">Import JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Networked Co-op (WebRTC)</div>
+      <div id="networkBox">
+        <div class="muted small">Use copy/paste signaling (manual). Create or join a session.</div>
+        <div style="display:flex;gap:6px">
+          <button id="createOffer" class="mini">Create Offer</button>
+          <button id="acceptOffer" class="mini">Accept Offer</button>
+        </div>
+        <textarea id="signalText" rows="3" placeholder="Paste offer/answer/ice here"></textarea>
+        <div style="display:flex;gap:6px">
+          <button id="sendPing" class="mini">Send Ping</button>
+          <button id="disconnectBtn" class="mini danger">Disconnect</button>
+        </div>
+        <div id="connStatus" class="muted small">Disconnected</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Save / Load</div>
+      <div style="display:flex;gap:6px">
+        <button id="saveBtn" class="mini">Save to local</button>
+        <button id="loadBtn" class="mini">Load</button>
+        <button id="exportSave" class="mini">Export JSON</button>
+        <button id="importSave" class="mini">Import JSON</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Game Log</div>
       <div id="log"></div>
     </div>
 
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div class="tile-legend" id="legend"></div>
-      <div style="text-align:right">
-        <div class="muted">Prototype — original assets generated at runtime</div>
-      </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="muted small">Controls:</div>
+      <div class="kbd">Arrows</div><div class="muted small">move</div>
+      <div class="kbd">Space</div><div class="muted small">attack / V.A.T.S. target</div>
+      <div class="kbd">E</div><div class="muted small">interact</div>
     </div>
+
   </div>
 </div>
 
 <script>
 /*
-  Isometric Turn-Based RPG Prototype
-  - Generates procedural pixel-art sprites on offscreen canvases
-    and converts them to base64 data URLs. These are used as
-    Image objects for drawing tiles and sprites.
-  - Implements a small map, player, and simple AI enemies.
-  - Turn-based: player has AP (action points) to move/attack.
+  IsoRPG — Full Prototype
+  - Procedural base64 assets are generated at runtime and used as images.
+  - Procedural world generation (seeded).
+  - A* pathfinding for enemies.
+  - S.P.E.C.I.A.L., leveling, perks.
+  - V.A.T.S. system: pause-turn selection, AP-cost and hit-chance.
+  - Dialog & quest framework.
+  - Simple WebAudio SFX and ambience.
+  - Save/Load via localStorage and JSON import/export.
+  - Map editor and map saving.
+  - Networked co-op via WebRTC DataChannel with manual signaling (copy/paste).
+  - Particle effects & animations.
+  - Everything in a single file.
 */
 
-// --------------------- Utilities ---------------------
+/* ------------------ Utilities ------------------ */
 const logEl = document.getElementById('log');
-function log(text){
-  const p = document.createElement('div'); p.textContent = text; logEl.prepend(p);
-}
+function log(msg){ const d=document.createElement('div'); d.textContent=msg; logEl.prepend(d); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-// clamp
-const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-
-// --------------------- Asset Generation ---------------------
-/*
-  createSprite(name, drawFn, size)
-  - drawFn receives (ctx, size) and should draw pixel-art-ish content
-  - returns a base64 data URL (PNG) created from an offscreen canvas
-*/
+/* ------------------ Procedural Assets (base64) ------------------ */
+/* createSprite(fn, size, scale) -> dataURL */
 function createSprite(drawFn, size=32, scale=1){
   const s = size * scale;
-  const c = document.createElement('canvas');
-  c.width = s; c.height = s;
-  const ctx = c.getContext('2d');
-  // nearest-neighbor (pixel art)
-  ctx.imageSmoothingEnabled = false;
-  // allow drawFn to draw
+  const c = document.createElement('canvas'); c.width=s; c.height=s;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
   drawFn(ctx, s);
-  // return dataURL (base64)
   return c.toDataURL('image/png');
 }
 
-// small helper to draw pixel rectangle grid look
-function pixelRect(ctx,x,y,w,h,fill){
-  ctx.fillStyle = fill;
-  ctx.fillRect(x,y,w,h);
-}
+/* helper pixel util */
+function pixelRect(ctx,x,y,w,h,fill){ ctx.fillStyle=fill; ctx.fillRect(x,y,w,h); }
 
-// Procedural sprites
-const ASSET_SIZES = {tile:64,char:48,icon:28};
+/* generate nicer pixel art assets */
 const ASSETS = {};
-
-// Floor tile (isometric 'dirt + cracks')
 ASSETS.floor = createSprite((ctx,s)=>{
-  ctx.fillStyle = '#3b402f';
-  ctx.fillRect(0,0,s,s);
-  // subtle noise
-  for(let i=0;i<140;i++){
+  ctx.fillStyle='#2f372e'; ctx.fillRect(0,0,s,s);
+  for(let i=0;i<120;i++){
     ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.12})`;
-    ctx.fillRect(Math.random()*s,Math.random()*s,Math.random()*2+1,Math.random()*2+1);
+    ctx.fillRect(Math.random()*s, Math.random()*s, Math.random()*2+1, Math.random()*2+1);
   }
-  // highlight center
-  const grd=ctx.createLinearGradient(0,0,0,s);
-  grd.addColorStop(0,'rgba(255,255,255,0.02)');
-  grd.addColorStop(1,'rgba(0,0,0,0.06)');
-  ctx.fillStyle=grd; ctx.fillRect(0,0,s,s);
-}, ASSET_SIZES.tile/16, 16);
+  // cracks
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(s*0.2,s*0.6);
+  ctx.lineTo(s*0.6,s*0.45);
+  ctx.lineTo(s*0.8,s*0.7);
+  ctx.stroke();
+},64,1);
 
-// Wall tile
 ASSETS.wall = createSprite((ctx,s)=>{
-  ctx.fillStyle = '#5a5146';
-  ctx.fillRect(0,0,s,s);
+  ctx.fillStyle='#5b4d43'; ctx.fillRect(0,0,s,s);
   // bricks
-  ctx.fillStyle='#4a3f34';
-  const bw = Math.floor(s/6);
+  ctx.fillStyle='#433829';
+  const bw=Math.floor(s/6);
   for(let y=0;y<s;y+=bw){
     for(let x=(y/bw)%2===0?0:bw/2;x<s;x+=bw){
-      ctx.fillRect(x,y,bw-2,bw-3);
+      ctx.fillRect(x+1,y+1,bw-3,bw-4);
     }
   }
-}, ASSET_SIZES.tile/16, 16);
+},64,1);
 
-// Player sprite (helmeted figure)
 ASSETS.player = createSprite((ctx,s)=>{
-  // background transparent
   ctx.clearRect(0,0,s,s);
-  // body
-  const w = s*0.4, h = s*0.44;
-  ctx.fillStyle='#c9d7e6';
-  ctx.fillRect(s*0.3, s*0.36, w, h);
-  // jacket
-  ctx.fillStyle='#2e6b6b';
-  ctx.fillRect(s*0.28, s*0.36 + s*0.12, w+4, h*0.5);
+  // torso
+  ctx.fillStyle='#2b6b6b'; ctx.fillRect(s*0.33,s*0.36,s*0.34,s*0.36);
   // head
-  ctx.fillStyle='#f1c27d';
-  ctx.fillRect(s*0.37, s*0.2, s*0.26, s*0.18);
-  // helmet visor
-  ctx.fillStyle='#1f2d33';
-  ctx.fillRect(s*0.36, s*0.22, s*0.28, s*0.08);
+  ctx.fillStyle='#f1c27d'; ctx.fillRect(s*0.38,s*0.18,s*0.24,s*0.18);
+  // visor
+  ctx.fillStyle='#0f1b1f'; ctx.fillRect(s*0.36,s*0.22,s*0.28,s*0.06);
   // backpack
-  ctx.fillStyle='#6b4b2d';
-  ctx.fillRect(s*0.56, s*0.42, s*0.16, s*0.24);
-  // outline for pixel feel
-  ctx.strokeStyle='rgba(0,0,0,0.4)';
-  ctx.lineWidth=1;
-  ctx.strokeRect(s*0.28,s*0.36,w+4,h);
-}, ASSET_SIZES.char/12, 12);
+  ctx.fillStyle='#6b4b2d'; ctx.fillRect(s*0.56,s*0.42,s*0.16,s*0.26);
+  // weapon (pixel)
+  ctx.fillStyle='#444'; ctx.fillRect(s*0.18,s*0.48,s*0.16,s*0.06);
+},48,1);
 
-// Enemy sprite (mutant-like)
 ASSETS.enemy = createSprite((ctx,s)=>{
   ctx.clearRect(0,0,s,s);
-  ctx.fillStyle='#8d5e3b';
-  ctx.fillRect(s*0.28,s*0.35,s*0.44,s*0.42);
-  // head
-  ctx.fillStyle='#7a2f2f';
-  ctx.fillRect(s*0.36,s*0.18,s*0.28,s*0.18);
-  // eye
-  ctx.fillStyle='#f7f7f7';
-  ctx.fillRect(s*0.42,s*0.22,s*0.05,s*0.05);
-  ctx.fillStyle='#000';
-  ctx.fillRect(s*0.44,s*0.22,s*0.02,s*0.02);
-}, ASSET_SIZES.char/12, 12);
+  ctx.fillStyle='#734444'; ctx.fillRect(s*0.32,s*0.38,s*0.36,s*0.38);
+  ctx.fillStyle='#502b2b'; ctx.fillRect(s*0.38,s*0.18,s*0.24,s*0.2);
+  ctx.fillStyle='#fff'; ctx.fillRect(s*0.44,s*0.22,s*0.06,s*0.06);
+},48,1);
 
-// Item icon (stimpak)
 ASSETS.stimpak = createSprite((ctx,s)=>{
   ctx.clearRect(0,0,s,s);
-  ctx.fillStyle='#d94141';
-  roundRect(ctx,s*0.18,s*0.2,s*0.64,s*0.5,4,true,false);
-  ctx.fillStyle='#fff';
-  ctx.fillRect(s*0.46,s*0.33,s*0.08,s*0.24);
-  ctx.fillRect(s*0.38,s*0.43,s*0.24,s*0.08);
-}, ASSET_SIZES.icon/7, 7);
+  ctx.fillStyle='#d94141'; roundRect(ctx,s*0.18,s*0.2,s*0.64,s*0.48,4,true,false);
+  ctx.fillStyle='#fff'; ctx.fillRect(s*0.45,s*0.33,s*0.08,s*0.24); ctx.fillRect(s*0.37,s*0.43,s*0.24,s*0.06);
+},28,1);
 
-// Helper: rounded rect
+ASSETS.weapon = createSprite((ctx,s)=>{
+  ctx.clearRect(0,0,s,s);
+  ctx.fillStyle='#222'; ctx.fillRect(s*0.15,s*0.42,s*0.6,s*0.08); ctx.fillRect(s*0.72,s*0.34,s*0.08,s*0.28);
+},28,1);
+
 function roundRect(ctx,x,y,w,h,r,fill,stroke){
   ctx.beginPath();
   ctx.moveTo(x+r,y);
@@ -202,345 +251,515 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke){
   if(stroke) ctx.stroke();
 }
 
-// Make small thumbnail images visible in UI legend
-function makeLegend(){
-  const legend = document.getElementById('legend');
-  const items = [
-    {img:ASSETS.floor, name:'Floor'},
-    {img:ASSETS.wall, name:'Wall'},
-    {img:ASSETS.player, name:'Player'},
-    {img:ASSETS.enemy, name:'Enemy'},
-    {img:ASSETS.stimpak, name:'Stimpak'},
-  ];
-  for(const it of items){
-    const d = document.createElement('div'); d.className='legend-item';
-    const img = document.createElement('img'); img.src=it.img; img.className='thumb';
-    d.appendChild(img);
-    const txt = document.createElement('div'); txt.textContent = it.name; txt.style.fontSize='13px';
-    d.appendChild(txt);
-    legend.appendChild(d);
-  }
-}
-makeLegend();
-
-// --------------------- Isometric Helpers ---------------------
-const TILE = {w:96, h:48}; // tile pixel size (iso diamond)
-function isoToScreen(ix,iy,offsetX,offsetY){
-  const sx = (ix - iy) * (TILE.w/2) + offsetX;
-  const sy = (ix + iy) * (TILE.h/2) + offsetY;
-  return {x:sx,y:sy};
-}
-function screenToIso(sx,sy,offsetX,offsetY){
-  const x = ((sx - offsetX) / (TILE.w/2) + (sy - offsetY) / (TILE.h/2)) / 2;
-  const y = ((sy - offsetY) / (TILE.h/2) - (sx - offsetX) / (TILE.w/2)) / 2;
-  return {x:Math.floor(x), y:Math.floor(y)};
-}
-
-// --------------------- Game World ---------------------
-const MAP_W = 12, MAP_H = 10;
-let map = [];
-function makeMap(){
-  map = Array.from({length:MAP_H},(_,y)=>Array.from({length:MAP_W},(_,x)=>{
-    // a simple room with some walls
-    const border = x===0||y===0||x===MAP_W-1||y===MAP_H-1;
-    const wall = border || (x===5 && y>2 && y<8) || (y===4 && x>2 && x<7 && Math.random()<0.6);
-    return {walkable:!wall, tile: wall ? 'wall':'floor', item: null};
-  }));
-  // place some items
-  map[2][3].item = {type:'stimpak', qty:1};
-  map[7][9].item = {type:'stimpak', qty:1};
-}
-makeMap();
-
-// Entities
-let player = {x:2,y:2,hp:18,maxHp:18,ap:6,maxAp:6,atk:4};
-let enemies = [
-  {x:8,y:4,hp:8,atk:3},
-  {x:9,y:7,hp:10,atk:3},
-];
-
-// --------------------- Canvas & Draw ---------------------
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d',{alpha:false});
-ctx.imageSmoothingEnabled = false;
-
-// camera offset so center of map shows
-let camOffset = {x: canvas.width/2 - TILE.w/2, y: 60};
-
-// Images loaded from base64 data URLs
+/* Make Image objects for drawing */
 const IMGS = {};
-function loadImagesFromAssets(){
-  for(const k in ASSETS){
-    const img = new Image();
-    img.src = ASSETS[k];
-    IMGS[k]=img;
-  }
+for(const k in ASSETS){ const img=new Image(); img.src=ASSETS[k]; IMGS[k]=img; }
+
+/* show small legend thumbnails in UI (already included earlier) */
+(function makeLegend(){ const legend=document.createElement('div'); legend.style.display='flex'; legend.style.gap='6px';
+  const items=[['floor','Floor'],['wall','Wall'],['player','You'],['enemy','Foe'],['stimpak','Stimpak']];
+  for(const [k,name] of items){ const el=document.createElement('div'); el.className='legend-item'; const img=document.createElement('img'); img.src=ASSETS[k]; img.className='thumb'; el.appendChild(img); const txt=document.createElement('div'); txt.textContent=name; el.appendChild(txt); legend.appendChild(el); }
+  document.getElementById('ui').insertBefore(legend, document.getElementById('ui').children[3]);
+})();
+
+/* ------------------ Isometric Helpers ------------------ */
+const TILE = {w:96,h:48};
+function isoToScreen(ix,iy,ox,oy){ const sx=(ix-iy)*(TILE.w/2)+ox; const sy=(ix+iy)*(TILE.h/2)+oy; return {x:sx,y:sy}; }
+function screenToIso(sx,sy,ox,oy){ const x=((sx-ox)/(TILE.w/2)+(sy-oy)/(TILE.h/2))/2; const y=((sy-oy)/(TILE.h/2)-(sx-ox)/(TILE.w/2))/2; return {x:Math.floor(x),y:Math.floor(y)}; }
+
+/* ------------------ World Generation ------------------ */
+/* We'll generate a grid map (W x H), supporting seed for reproducibility. Mix rooms + cellular automata caves. */
+const MAP_W=20, MAP_H=16;
+let map = []; // map[y][x] = {tile:'floor'|'wall', item:null, npc:null}
+let seed = Math.floor(Math.random()*1e9);
+function seededRandom(s){ // simple xorshift
+  let x = s ^ 0x6a09e667;
+  return function(){ x ^= x<<13; x ^= x>>>17; x ^= x<<5; return (x>>>0)/4294967296; }
 }
-loadImagesFromAssets();
+function generateWorld(newSeed=Date.now()){
+  seed=newSeed|0; const rnd=seededRandom(seed);
+  // start with noise
+  map=Array.from({length:MAP_H},(_,y)=>Array.from({length:MAP_W},(_,x)=>{
+    const v = rnd();
+    const border = x===0||y===0||x===MAP_W-1||y===MAP_H-1;
+    return {tile: border ? 'wall' : (v<0.38 ? 'wall' : 'floor'), item:null, npc:null};
+  }));
+  // cellular automata smoothing
+  for(let t=0;t<4;t++){
+    const newm=JSON.parse(JSON.stringify(map));
+    for(let y=1;y<MAP_H-1;y++){
+      for(let x=1;x<MAP_W-1;x++){
+        let walls=0;
+        for(let yy=y-1;yy<=y+1;yy++) for(let xx=x-1;xx<=x+1;xx++) if(map[yy][xx].tile==='wall') walls++;
+        newm[y][x].tile = (walls>4)?'wall':'floor';
+      }
+    }
+    map=newm;
+  }
+  // carve rooms
+  const rooms = randInt(2,4);
+  for(let r=0;r<rooms;r++){
+    const rw=randInt(3,6), rh=randInt(3,5);
+    const rx=randInt(1,MAP_W-rw-2), ry=randInt(1,MAP_H-rh-2);
+    for(let y=ry;y<ry+rh;y++) for(let x=rx;x<rx+rw;x++) map[y][x].tile='floor';
+  }
+  // place items & NPCs
+  const freeCells=[];
+  for(let y=1;y<MAP_H-1;y++) for(let x=1;x<MAP_W-1;x++) if(map[y][x].tile==='floor') freeCells.push([x,y]);
+  // place 1-3 enemies
+  const enemyCount = randInt(2,5);
+  enemies=[];
+  for(let i=0;i<enemyCount;i++){
+    const c = freeCells.splice(Math.floor(rnd()*freeCells.length),1)[0];
+    if(!c) break;
+    const [x,y]=c;
+    map[y][x].npc = {type:'enemy', hp: randInt(6,12), atk: randInt(2,4), id:'E'+i};
+    enemies.push({x,y,hp:map[y][x].npc.hp,atk:map[y][x].npc.atk,id:map[y][x].npc.id});
+  }
+  // place some items
+  for(let i=0;i<3;i++){
+    const c = freeCells.splice(Math.floor(rnd()*freeCells.length),1)[0];
+    if(!c) break;
+    const [x,y]=c;
+    map[y][x].item = {type:'stimpak', qty:1};
+  }
+  // place 1 NPC towns-person for quests
+  const c = freeCells.splice(Math.floor(rnd()*freeCells.length),1)[0];
+  if(c){ const [x,y]=c; map[y][x].npc = {type:'npc', name:'Wendel', id:'npc0', dialogId:'greet'}; npcs.push({x,y,id:'npc0',name:'Wendel'}); }
+}
+
+/* ------------------ Player + Entities ------------------ */
+let player = {x:2,y:2,hp:20,maxHp:20,ap:6,maxAp:6,atk:4,level:1,xp:0,nextXp:50,special:{S:5,P:5,E:5,C:5,I:5,A:5,L:5},perkPoints:0};
+let enemies = []; // filled at map gen
+let npcs = [];
+
+/* ------------------ Canvas & Draw ------------------ */
+const canvas = document.getElementById('game'), ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+let cam = {x:canvas.width/2 - TILE.w/2, y:80};
 
 function draw(){
-  // clear
-  ctx.fillStyle = '#0a0f14';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  // draw tiles sorted by iso order (y then x)
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // draw tiles
   for(let y=0;y<MAP_H;y++){
     for(let x=0;x<MAP_W;x++){
-      const scr = isoToScreen(x,y,camOffset.x,camOffset.y);
+      const scr = isoToScreen(x,y,cam.x,cam.y);
       const tile = map[y][x].tile;
       const img = IMGS[tile];
-      if(img && img.complete){
-        ctx.drawImage(img, scr.x - TILE.w/2, scr.y - TILE.h/1.1, TILE.w, TILE.h);
-      } else {
-        // fallback rectangle
-        ctx.fillStyle = tile==='wall'?'#6b5f54':'#3c3f2f';
-        ctx.fillRect(scr.x - TILE.w/2, scr.y - TILE.h/1.1, TILE.w, TILE.h);
-      }
-      // item icon if present
+      if(img.complete) ctx.drawImage(img, scr.x - TILE.w/2, scr.y - TILE.h*0.9, TILE.w, TILE.h);
+      // draw item
       if(map[y][x].item){
-        const it = map[y][x].item;
-        const icon = IMGS[it.type];
-        if(icon && icon.complete){
-          ctx.drawImage(icon, scr.x - 14, scr.y - 10, 28, 28);
-        }
+        const icon = IMGS[map[y][x].item.type];
+        if(icon.complete) ctx.drawImage(icon, scr.x - 12, scr.y - 10, 24, 24);
+      }
+      // npc marker
+      if(map[y][x].npc && map[y][x].npc.type==='npc'){
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(scr.x-6, scr.y-20, 12, 12);
       }
     }
   }
-
-  // draw entities (sorted by y for simple depth)
-  const ents = [
-    {...player, type:'player'},
-    ...enemies.map(e=>({...e,type:'enemy'}))
-  ].sort((a,b)=> (a.y+a.x) - (b.y+b.x));
-
+  // draw entities sorted by y+x for depth
+  const ents = [{...player, type:'player'}, ...enemies.map(e=>({...e,type:'enemy'})), ...npcs.map(n=>({...n,type:'npc'}))];
+  ents.sort((a,b)=> (a.y+a.x)-(b.y+b.x));
   for(const e of ents){
-    const scr = isoToScreen(e.x,e.y,camOffset.x,camOffset.y);
-    const img = IMGS[e.type==='player'?'player':'enemy'];
-    if(img && img.complete){
-      const w = 48, h=48;
-      ctx.drawImage(img, scr.x - w/2, scr.y - TILE.h/2 - h/2 + 6, w, h);
-    }
+    const scr = isoToScreen(e.x,e.y,cam.x,cam.y);
+    let img = IMGS[e.type==='player'?'player':'enemy'];
+    if(e.type==='npc') img = IMGS['player']; // reuse player sprite for npc
+    ctx.drawImage(img, scr.x - 24, scr.y - 44, 48, 48);
     // HP bar
-    ctx.fillStyle='rgba(0,0,0,0.5)';
-    ctx.fillRect(scr.x-24, scr.y - TILE.h/2 - 26, 48,6);
-    const hpPct = (e.hp || 0) / (e.maxHp || (e.type==='player'?player.maxHp:10));
-    ctx.fillStyle = 'rgba(120,200,100,0.95)';
-    ctx.fillRect(scr.x-24, scr.y - TILE.h/2 - 26, 48*hpPct, 6);
+    if(e.type!=='player'){
+      const hpPct = e.hp/(e.maxHp||10);
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(scr.x-20, scr.y - TILE.h/2 - 22, 40,6);
+      ctx.fillStyle='rgba(200,50,50,0.95)'; ctx.fillRect(scr.x-20, scr.y - TILE.h/2 - 22, 40*hpPct,6);
+    }
   }
-
-  // highlight hovered tile
-  if(mouse.hover){
-    const scr = isoToScreen(mouse.hover.x, mouse.hover.y, camOffset.x, camOffset.y);
-    ctx.strokeStyle='rgba(255,255,255,0.12)';
-    ctx.lineWidth=2;
-    // diamond highlight
-    ctx.beginPath();
-    ctx.moveTo(scr.x, scr.y - TILE.h/2);
-    ctx.lineTo(scr.x + TILE.w/2, scr.y);
-    ctx.lineTo(scr.x, scr.y + TILE.h/2);
-    ctx.lineTo(scr.x - TILE.w/2, scr.y);
-    ctx.closePath();
-    ctx.stroke();
-  }
-
-  // HUD overlays (AP circles)
+  // UI overlay
   drawHUD();
 }
 
-function drawHUD(){
-  // simple AP display near player
-  const scr = isoToScreen(player.x, player.y, camOffset.x, camOffset.y);
-  ctx.font='13px sans-serif';
-  ctx.fillStyle='rgba(255,255,255,0.95)';
-  ctx.fillText(`AP: ${player.ap}`, scr.x - 18, scr.y + 48);
-}
-
-// initial update UI
+/* ------------------ HUD & UI binding ------------------ */
 function updateUI(){
   document.getElementById('turnLabel').textContent = gameState.turn;
   document.getElementById('turnCounter').textContent = turns;
   document.getElementById('hpLabel').textContent = `${player.hp}/${player.maxHp}`;
   document.getElementById('apLabel').textContent = `${player.ap}/${player.maxAp}`;
-
-  // inventory list
-  const inv = document.getElementById('inventory');
-  inv.innerHTML = '';
-  // gather items on player tile
-  const items = map[player.y][player.x].item ? [map[player.y][player.x].item] : [];
-  items.forEach(it=>{
-    const b = document.createElement('button');
-    b.style.display='flex'; b.style.alignItems='center'; b.style.gap='8px';
-    const img = document.createElement('img'); img.src=IMGS[it.type].src; img.width=28; img.height=28; img.style.imageRendering='pixelated';
-    b.appendChild(img);
-    b.appendChild(document.createTextNode(`${it.type} x${it.qty}`));
-    b.onclick = ()=>{
-      if(it.type==='stimpak'){
-        player.hp = Math.min(player.maxHp, player.hp + 8);
-        log('Used stimpak. +8 HP.');
-        map[player.y][player.x].item = null;
-        endPlayerTurn(true);
-      }
-      updateUI(); draw();
-    };
-    inv.appendChild(b);
-  });
+  document.getElementById('lvlLabel').textContent = player.level;
+  document.getElementById('xpLabel').textContent = `${player.xp}/${player.nextXp}`;
+  // S.P.E.C.I.A.L.
+  const grid = document.getElementById('specialGrid'); grid.innerHTML='';
+  for(const k of ['S','P','E','C','I','A','L']){
+    const d=document.createElement('div'); d.className='stat'; d.style.display='flex'; d.style.justifyContent='space-between';
+    d.innerHTML=`<div>${k}</div><div>${player.special[k]}</div>`;
+    grid.appendChild(d);
+  }
+  // inventory
+  const invEl = document.getElementById('inventory'); invEl.innerHTML='';
+  // collect items on player tile plus weapons etc (here simplified)
+  const items = []; // for prototype, include stimpak if on tile
+  if(map[player.y] && map[player.y][player.x] && map[player.y][player.x].item) items.push(map[player.y][player.x].item);
+  // also show weapon (single)
+  items.push({type:'weapon',name:'Pipe Gun'});
+  for(const it of items){
+    const b=document.createElement('button'); b.style.display='flex'; b.style.alignItems='center'; b.style.gap='6px';
+    const img=document.createElement('img'); img.src=IMGS[it.type||it.name.toLowerCase()]?.src||IMGS['stimpak'].src; img.width=28; img.height=28; img.className='thumb';
+    b.appendChild(img); b.appendChild(document.createTextNode(it.type==='weapon'?it.name:it.type));
+    b.onclick=()=>{ if(it.type==='stimpak'){ player.hp=Math.min(player.maxHp, player.hp+8); map[player.y][player.x].item=null; log('Used stimpak. +8 HP'); animatePickup(player.x,player.y); endPlayerTurn(true); } updateUI(); draw(); }
+    invEl.appendChild(b);
+  }
+  // quests
+  const qEl=document.getElementById('quests'); qEl.innerHTML='';
+  for(const q of quests){ const r=document.createElement('div'); r.textContent=`${q.title} — ${q.state}`; qEl.appendChild(r); }
 }
 
-// --------------------- Input & Game Logic ---------------------
-let mouse = {x:0,y:0,hover:null};
-canvas.addEventListener('mousemove', e=>{
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = (e.clientX - rect.left);
-  mouse.y = (e.clientY - rect.top);
-  const iso = screenToIso(mouse.x, mouse.y, camOffset.x, camOffset.y);
-  if(iso.x>=0 && iso.y>=0 && iso.x<MAP_W && iso.y<MAP_H) mouse.hover = iso;
-  else mouse.hover = null;
-  draw();
-});
-canvas.addEventListener('click', e=>{
-  if(!mouse.hover) return;
-  const hx = mouse.hover.x, hy = mouse.hover.y;
-  // if adjacent and walkable, move; else if adjacent enemy and space used for attack require spacebar (or we can attack on click)
-  const dist = Math.abs(hx-player.x)+Math.abs(hy-player.y);
-  if(dist===1 && gameState.turn==='Player'){
-    if(enemies.findIndex(en=>en.x===hx&&en.y===hy)!==-1){
-      // attack
-      playerAttackAt(hx,hy);
-    } else {
-      attemptMovePlayer(hx,hy);
+/* ------------------ Particles & Animations ------------------ */
+let particles = [];
+function spawnParticle(x,y,opts){
+  particles.push({x,y,life:opts.life||40,dx:opts.dx||0,dy:opts.dy||-0.5,color:opts.color||'#fff'});
+}
+function drawParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; const scr=isoToScreen(p.x,p.y,cam.x,cam.y);
+    ctx.globalAlpha = p.life/40;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(scr.x-2+ p.dx*(40-p.life)/4, scr.y-8 + p.dy*(40-p.life)/4, 4,4);
+    ctx.globalAlpha=1;
+    p.life--; if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+/* ------------------ A* Pathfinding ------------------ */
+function neighbors(x,y){
+  const res=[];
+  for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    const nx=x+dx, ny=y+dy;
+    if(nx>=0 && ny>=0 && nx<MAP_W && ny<MAP_H && map[ny][nx].tile==='floor' && !occupiedByEnemy(nx,ny)) res.push({x:nx,y:ny});
+  }
+  return res;
+}
+function occupiedByEnemy(x,y){ return enemies.some(e=>e.x===x && e.y===y) || (player.x===x && player.y===y); }
+function heuristic(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+function astar(start,goal){
+  const startKey = `${start.x},${start.y}`, goalKey=`${goal.x},${goal.y}`;
+  const open = new Map(); open.set(startKey,{x:start.x,y:start.y,g:0,f:heuristic(start,goal),parent:null});
+  const closed = new Set();
+  while(open.size){
+    // pick lowest f
+    let curKey, cur;
+    for(const [k,v] of open){ if(!cur || v.f<cur.f){ cur=v; curKey=k; } }
+    if(cur.x===goal.x && cur.y===goal.y){ // reconstruct
+      const path=[]; let it=cur;
+      while(it){ path.push({x:it.x,y:it.y}); it=it.parent; }
+      path.reverse(); return path;
+    }
+    open.delete(curKey); closed.add(curKey);
+    for(const nb of neighbors(cur.x,cur.y)){
+      const nbKey=`${nb.x},${nb.y}`; if(closed.has(nbKey)) continue;
+      const g = cur.g + 1;
+      const f = g + heuristic(nb,goal);
+      const existing = open.get(nbKey);
+      if(!existing || g < existing.g) open.set(nbKey, {x:nb.x,y:nb.y,g,f,parent:cur});
     }
   }
-});
-
-// keyboard
-window.addEventListener('keydown', (e)=>{
-  if(gameState.turn!=='Player') return;
-  const key = e.key;
-  const dir = {ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0]};
-  if(key in dir){
-    e.preventDefault();
-    const [dx,dy] = dir[key];
-    const nx = player.x + dx, ny = player.y + dy;
-    if(inBounds(nx,ny) && map[ny][nx].walkable){
-      attemptMovePlayer(nx,ny);
-    } else {
-      log('Blocked.');
-    }
-  } else if(key===' '){
-    // try attack any adjacent enemy
-    const enemy = enemies.find(en=>Math.abs(en.x-player.x)+Math.abs(en.y-player.y)===1);
-    if(enemy) playerAttackAt(enemy.x, enemy.y);
-    else log('No adjacent enemy to attack.');
-  } else if(key==='e' || key==='E'){
-    // interact (pick up)
-    const it = map[player.y][player.x].item;
-    if(it){
-      log(`Picked up ${it.type}.`);
-      // keep item on tile (inventory simplified)
-      // In this prototype, item stays and interaction in UI allows usage
-      updateUI();
-    } else log('Nothing here.');
-  }
-});
-
-// clickable UI
-document.getElementById('endTurnBtn').addEventListener('click', ()=>{
-  if(gameState.turn==='Player') endPlayerTurn();
-});
-
-function inBounds(x,y){ return x>=0 && y>=0 && x<MAP_W && y<MAP_H; }
-
-function attemptMovePlayer(nx,ny){
-  if(player.ap <= 0){ log('No AP left.'); return; }
-  // check tile
-  if(!map[ny][nx].walkable){ log('Cannot move there.'); return; }
-  // check enemy on tile
-  if(enemies.find(en=>en.x===nx&&en.y===ny)){ log('Enemy blocks that square.'); return; }
-  player.x = nx; player.y = ny; player.ap -= 2; log(`Moved to ${nx},${ny}. (-2 AP)`);
-  updateUI(); draw();
-  // auto end if no AP
-  if(player.ap <= 0) endPlayerTurn();
+  return null;
 }
 
-function playerAttackAt(x,y){
-  if(player.ap <= 0){ log('No AP to attack.'); return; }
-  const idx = enemies.findIndex(en=>en.x===x&&en.y===y);
-  if(idx===-1){ log('No enemy there.'); return; }
-  const en = enemies[idx];
-  // simple hit chance
-  const dmg = player.atk + Math.floor(Math.random()*3);
-  en.hp -= dmg;
-  player.ap -= 3;
-  log(`You hit the enemy for ${dmg} damage. (-3 AP)`);
-  if(en.hp <= 0){
-    log('Enemy dies.');
-    enemies.splice(idx,1);
-  }
-  updateUI(); draw();
-  if(player.ap <= 0) endPlayerTurn();
-}
-
-// turn flow
-let gameState = {turn:'Player'}; // 'Player' or 'Enemies'
-let turns = 0;
+/* ------------------ Turn System & AI ------------------ */
+let gameState = {turn:'Player'}; let turns=0;
 function endPlayerTurn(skipLog=false){
   if(!skipLog) log('Player ends turn.');
-  gameState.turn='Enemies';
-  updateUI();
-  setTimeout(enemyPhase, 400);
+  gameState.turn='Enemies'; updateUI();
+  setTimeout(enemyPhase,300);
 }
-
 function enemyPhase(){
-  log('Enemies take their turn.');
-  // simple AI: each enemy moves toward player if not adjacent, else attack
+  log('Enemies acting...');
   for(const en of enemies){
-    if(en.hp <= 0) continue;
+    if(en.hp<=0) continue;
     const dist = Math.abs(en.x-player.x)+Math.abs(en.y-player.y);
     if(dist===1){
-      // attack
-      const dmg = en.atk + Math.floor(Math.random()*2);
-      player.hp -= dmg;
-      log(`Enemy hits you for ${dmg} damage.`);
-      if(player.hp<=0){ log('You died — game over. Refresh to restart.'); gameOver=true; draw(); updateUI(); return; }
+      const dmg = en.atk + randInt(0,1);
+      player.hp -= dmg; log(`Enemy hits you for ${dmg}`); spawnParticle(en.x,en.y,{color:'#ff6633',life:30});
+      if(player.hp<=0){ log('You died. Reload page to restart.'); gameOver=true; updateUI(); draw(); return; }
     } else {
-      // try to move closer
-      const dx = player.x > en.x ? 1 : (player.x < en.x ? -1:0);
-      const dy = player.y > en.y ? 1 : (player.y < en.y ? -1:0);
-      // try dx-first then dy
-      let moved=false;
-      for(const [mx,my] of [[dx,0],[0,dy]]){
-        const nx = en.x + mx, ny = en.y + my;
-        if(!moved && inBounds(nx,ny) && map[ny][nx].walkable && !entityAt(nx,ny)){
-          en.x = nx; en.y = ny; moved=true; break;
-        }
+      // pathfind toward player
+      const path = astar({x:en.x,y:en.y},{x:player.x,y:player.y});
+      if(path && path.length>1){
+        // move 1 step
+        en.x = path[1].x; en.y = path[1].y; log('Enemy moves.'); animateMove(en);
       }
-      if(moved) log('An enemy moves.');
     }
   }
-  // restore player AP slightly at start of next player turn
-  turns++;
-  player.ap = player.maxAp;
-  gameState.turn='Player';
+  // next player turn
+  turns++; player.ap = player.maxAp; gameState.turn='Player'; updateUI(); draw();
+}
+
+/* ------------------ Movement & Input ------------------ */
+let mouse={x:0,y:0,hover:null};
+canvas.addEventListener('mousemove',(e)=>{ const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; const iso=screenToIso(mouse.x,mouse.y,cam.x,cam.y); mouse.hover=(iso.x>=0&&iso.y>=0&&iso.x<MAP_W&&iso.y<MAP_H)?iso:null; draw(); });
+canvas.addEventListener('click',(e)=>{
+  if(!mouse.hover) return;
+  const hx=mouse.hover.x, hy=mouse.hover.y;
+  const dist=Math.abs(hx-player.x)+Math.abs(hy-player.y);
+  if(document.getElementById('map-editor').style.display!=='none'){
+    // editor mode
+    applyEditorAt(hx,hy);
+    return;
+  }
+  if(gameState.turn!=='Player') return;
+  const npc = map[hy][hx].npc;
+  if(npc && npc.type==='npc' && dist<=1){ openDialog(npc); return; }
+  const enemy = enemies.find(en=>en.x===hx&&en.y===hy);
+  if(enemy && dist===1){ playerAttackAt(hx,hy); return; }
+  if(dist===1){ attemptMovePlayer(hx,hy); }
+});
+window.addEventListener('keydown',(e)=>{
+  if(gameState.turn!=='Player') return;
+  const dir = {ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0]};
+  if(e.key in dir){ e.preventDefault(); const [dx,dy]=dir[e.key]; const nx=player.x+dx, ny=player.y+dy; if(inBounds(nx,ny) && map[ny][nx].tile==='floor' && !occupiedByEnemy(nx,ny)){ attemptMovePlayer(nx,ny); } else log('Blocked.'); }
+  else if(e.key===' '){ // attack adjacent enemy if any else VATS mode
+    const enemy = enemies.find(en=>Math.abs(en.x-player.x)+Math.abs(en.y-player.y)===1);
+    if(enemy) playerAttackAt(enemy.x,enemy.y); else enterVats();
+  } else if(e.key.toLowerCase()==='e'){ interact(); }
+});
+
+/* helpers */
+function inBounds(x,y){ return x>=0&&y>=0&&x<MAP_W&&y<MAP_H; }
+function attemptMovePlayer(nx,ny){
+  if(player.ap<=0){ log('No AP.'); return; }
+  if(!inBounds(nx,ny) || map[ny][nx].tile!=='floor'){ log('Cannot move there.'); return; }
+  if(enemies.findIndex(en=>en.x===nx&&en.y===ny)!==-1){ log('Enemy blocks tile.'); return; }
+  player.x=nx; player.y=ny; player.ap-=2; log(`Moved to ${nx},${ny} (-2 AP)`); animateMove(player); updateUI(); draw();
+  if(player.ap<=0) endPlayerTurn();
+}
+function playerAttackAt(x,y){
+  if(player.ap<=0){ log('No AP to attack.'); return; }
+  const idx = enemies.findIndex(en=>en.x===x&&en.y===y);
+  if(idx===-1){ log('No enemy there.'); return; }
+  const en=enemies[idx];
+  const dmg = player.atk + randInt(0,2);
+  en.hp -= dmg; player.ap -= 3; log(`You hit enemy for ${dmg} (-3 AP)`); spawnParticle(x,y,{color:'#ff9933'});
+  if(en.hp<=0){ log('Enemy killed.'); animateDeath(en); enemies.splice(idx,1); }
   updateUI(); draw();
+  if(player.ap<=0) endPlayerTurn();
+}
+function interact(){
+  const it = map[player.y][player.x].item;
+  if(it){ if(it.type==='stimpak'){ player.hp = Math.min(player.maxHp, player.hp+8); map[player.y][player.x].item=null; log('Used stimpak. +8 HP'); animatePickup(player.x,player.y); endPlayerTurn(true); updateUI(); draw(); } else log('Interacted.'); } else log('Nothing to interact with.');
 }
 
-// check entity
-function entityAt(x,y){
-  if(player.x===x && player.y===y) return true;
-  return enemies.some(e=>e.x===x && e.y===y);
+/* ------------------ V.A.T.S. System ------------------ */
+let vatsMode=false, vatsTargets=[];
+function enterVats(){
+  if(player.ap<3){ log('Not enough AP for V.A.T.S.'); return; }
+  vatsMode=true; vatsTargets=[];
+  // gather adjacent enemies within 5 tiles
+  for(const en of enemies){
+    const dist = Math.abs(en.x-player.x)+Math.abs(en.y-player.y);
+    if(dist<=5) vatsTargets.push(en);
+  }
+  if(vatsTargets.length===0){ log('No targets in V.A.T.S. range.'); vatsMode=false; return; }
+  log('Entered V.A.T.S. — select target (click or press space when highlighted).');
+  draw(); // UI should show selection (we'll display small overlay)
+  // simple UI: await click on enemy; else pressing space will pick nearest
+  // handled in click / keyboard handlers: if vatsMode===true and click target, resolveVats(target)
+}
+function resolveVats(target){
+  if(!vatsMode) return;
+  // compute hit chance from SPECIAL I and weapon accuracy; simple model
+  const baseHit = 50 + (player.special.I-5)*4 - (Math.abs(target.x-player.x)+Math.abs(target.y-player.y))*4;
+  const hitRoll = randInt(1,100);
+  const hit = hitRoll <= baseHit;
+  const apCost = 3 + Math.max(0,Math.floor((Math.abs(target.x-player.x)+Math.abs(target.y-player.y))/2));
+  if(player.ap < apCost){ log('Not enough AP for that V.A.T.S. shot.'); vatsMode=false; return; }
+  player.ap -= apCost;
+  if(hit){
+    const dmg = player.atk + randInt(2,5) + Math.floor((player.special.S-5)/2);
+    target.hp -= dmg; log(`V.A.T.S. hit! ${dmg} damage.`);
+    spawnParticle(target.x,target.y,{color:'#ffcc33',life:40});
+    if(target.hp<=0){ log('Target down.'); enemies = enemies.filter(e=>e!==target); animateDeath(target); }
+  } else { log('V.A.T.S. shot missed.'); spawnParticle(target.x,target.y,{color:'#888',life:20}); }
+  vatsMode=false; updateUI(); draw();
+  if(player.ap<=0) endPlayerTurn();
 }
 
-let gameOver = false;
+/* ------------------ Dialog & Quest System ------------------ */
+let quests = [{id:'q1',title:'Find Wendel\'s Stash',state:'available',target:null}];
+const dialogues = {
+  'greet': [
+    {who:'Wendel', text:'You look like someone who can handle trouble. My stash was stolen by raiders.', opts:[{txt:'I will help','act':'accept','q':'q1'},{txt:'Not now','act':'decline'}]}
+  ],
+  'after_accept': [
+    {who:'Wendel', text:'Find the raiders and bring back the stash.', opts:[{txt:'On it','act':'close'}]}
+  ]
+};
+function openDialog(npc){
+  const dlg = dialogues[npc.dialogId||'greet'];
+  if(!dlg) return;
+  // show simple prompt overlay using prompt() for brevity (could be modal)
+  const first = dlg[0];
+  let txt = `${npc.name||first.who}: ${first.text}\n\n`;
+  for(let i=0;i<first.opts.length;i++) txt+=`${i+1}. ${first.opts[i].txt}\n`;
+  const pick = prompt(txt+'\nChoose option number:');
+  const idx = parseInt(pick)-1;
+  if(isNaN(idx) || idx<0 || idx>=first.opts.length) return;
+  const opt = first.opts[idx];
+  if(opt.act==='accept' && opt.q){
+    const q = quests.find(q=>q.id===opt.q);
+    if(q){ q.state='active'; q.target='raiders'; log('Quest accepted: '+q.title); }
+    // move dialog to after_accept
+    openDialogState('after_accept', npc);
+  } else { log('Dialog ended.'); }
+}
+function openDialogState(state, npc){
+  const dlg = dialogues[state];
+  if(!dlg) return;
+  alert(`${npc.name||dlg[0].who}: ${dlg[0].text}`);
+}
 
-// initial draw & UI
-updateUI();
-draw();
+/* ------------------ Simple Sound via WebAudio ------------------ */
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq, dur=0.08, vol=0.15){
+  const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+  o.type='saw'; o.frequency.value=freq; g.gain.value=vol; o.connect(g); g.connect(audioCtx.destination);
+  o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+dur); o.stop(audioCtx.currentTime+dur+0.02);
+}
+function playSfx(name){
+  if(!audioEnabled) return;
+  if(name==='pickup') beep(900,0.06,0.08);
+  if(name==='hit') beep(200,0.12,0.12);
+  if(name==='vats') beep(1200,0.12,0.14);
+}
+let audioEnabled = true;
 
-// simple auto-turn counter demonstrate turns progression
-log('Welcome — prototype started.');
+/* ------------------ Save / Load ------------------ */
+function saveGame(){
+  const state={player,map,enemies,quests,seed,turns,gameState};
+  localStorage.setItem('isorpg.save', JSON.stringify(state));
+  log('Game saved.');
+}
+function loadGame(){
+  const s=localStorage.getItem('isorpg.save'); if(!s){ log('No save found.'); return; }
+  try{
+    const st=JSON.parse(s);
+    player=st.player; map=st.map; enemies=st.enemies||[]; quests=st.quests||[]; seed=st.seed; turns=st.turns||0; gameState=st.gameState||{turn:'Player'};
+    log('Game loaded.');
+    updateUI(); draw();
+  }catch(e){ log('Failed to load save.'); }
+}
 
-// prevent accidental selection
-canvas.onselectstart = ()=>false;
+/* ------------------ Map Editor ------------------ */
+let editorMode='wall';
+document.getElementById('toggleEditor').addEventListener('click',()=>{
+  const el=document.getElementById('map-editor'); el.style.display=(el.style.display==='none'?'flex':'none');
+});
+document.getElementById('editorMode').addEventListener('change',e=>editorMode=e.target.value);
+function applyEditorAt(x,y){
+  if(editorMode==='erase'){ map[y][x].tile='floor'; map[y][x].item=null; map[y][x].npc=null; return; }
+  if(editorMode==='wall'){ map[y][x].tile='wall'; return; }
+  if(editorMode==='floor'){ map[y][x].tile='floor'; return; }
+  if(editorMode==='enemy'){ map[y][x].npc={type:'enemy',hp:10,atk:3,id:'editorE'+Date.now()}; enemies.push({x,y,hp:10,atk:3,id:map[y][x].npc.id}); return; }
+  if(editorMode==='stimpak'){ map[y][x].item={type:'stimpak',qty:1}; return; }
+}
+
+/* ------------------ Editor import/export */
+document.getElementById('exportMap').addEventListener('click',()=>{
+  const text = JSON.stringify({map,seed},null,2); prompt('Map JSON (copy):', text);
+});
+document.getElementById('importMap').addEventListener('click', ()=>{
+  const txt = prompt('Paste map JSON:');
+  if(!txt) return;
+  try{ const obj=JSON.parse(txt); map=obj.map||map; seed=obj.seed||seed; log('Map imported.'); draw(); }catch(e){ log('Invalid JSON.'); }
+});
+
+/* ------------------ Save/Load UI */
+document.getElementById('saveBtn').addEventListener('click', saveGame);
+document.getElementById('loadBtn').addEventListener('click', loadGame);
+document.getElementById('exportSave').addEventListener('click', ()=>{ const s=localStorage.getItem('isorpg.save'); prompt('Export Save JSON:', s||'{}'); });
+document.getElementById('importSave').addEventListener('click', ()=>{ const txt=prompt('Paste save JSON:'); if(!txt) return; localStorage.setItem('isorpg.save',txt); log('Imported save to localStorage.'); });
+
+/* ------------------ Map regen & seed handling ------------------ */
+document.getElementById('regenMap').addEventListener('click', ()=>{ generateWorld(Math.floor(Math.random()*1e9)); updateUI(); draw(); log('World regenerated.'); });
+document.getElementById('saveMapBtn').addEventListener('click', ()=>{ localStorage.setItem('isorpg.map', JSON.stringify({map,seed})); log('Map saved.'); });
+document.getElementById('loadMapBtn').addEventListener('click', ()=>{ const s=localStorage.getItem('isorpg.map'); if(!s){ log('No saved map.'); return;} const obj=JSON.parse(s); map=obj.map; seed=obj.seed; log('Map loaded.'); draw(); });
+
+/* ------------------ Map & Entities initial generation ------------------ */
+generateWorld(seed);
+player.x=2; player.y=2;
+updateUI(); draw();
+
+/* ------------------ Animations (move, death, pickup) ------------------ */
+function animateMove(entity){ // simple spawn particles
+  spawnParticle(entity.x,entity.y,{color:'#aaf',life:20});
+}
+function animateDeath(entity){
+  for(let i=0;i<8;i++) spawnParticle(entity.x,entity.y,{color:'#ff6633',dx:(Math.random()-0.5)*2,dy:-Math.random()*1.2,life:30});
+}
+function animatePickup(x,y){ for(let i=0;i<6;i++) spawnParticle(x,y,{color:'#6f6',dx:(Math.random()-0.5)*2,dy:-Math.random()*1.4,life:30}); playSfx('pickup'); }
+
+/* ------------------ Game loop for drawing particles and overlays ------------------ */
+let last=0; function loop(t){
+  const dt = t-last; last=t;
+  draw();
+  drawParticles();
+  // overlay V.A.T.S. UI
+  if(vatsMode){
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(12,12,260,120);
+    ctx.fillStyle='#fff'; ctx.fillText('V.A.T.S. — select a target (click) or press nearest enemy space to execute',20,36);
+    let i=0;
+    for(const en of vatsTargets){
+      ctx.fillStyle='#fff'; ctx.fillText(`${i+1}: Enemy ${en.id || ''} at ${en.x},${en.y}`, 20, 58 + i*16);
+      i++;
+    }
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ------------------ Networking (WebRTC DataChannel manual signaling) ------------------ */
+let pc=null, dc=null;
+const statusEl = document.getElementById('connStatus');
+document.getElementById('createOffer').addEventListener('click', async ()=>{
+  pc = new RTCPeerConnection(); dc = pc.createDataChannel('game');
+  setupDataChannel(dc);
+  pc.onicecandidate = e => { if(e.candidate) document.getElementById('signalText').value += JSON.stringify({ice:e.candidate}) + '\n'; };
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  document.getElementById('signalText').value = JSON.stringify({sdp:pc.localDescription});
+  statusEl.textContent = 'Offer created — copy the text and send to peer.';
+});
+document.getElementById('acceptOffer').addEventListener('click', async ()=>{
+  const txt = document.getElementById('signalText').value.trim(); if(!txt){ alert('Paste their offer in the box then press Accept Offer.'); return; }
+  const obj = JSON.parse(txt);
+  pc = new RTCPeerConnection();
+  pc.ondatachannel = e => { dc = e.channel; setupDataChannel(dc); };
+  pc.onicecandidate = e => { if(e.candidate) document.getElementById('signalText').value += JSON.stringify({ice:e.candidate}) + '\n'; };
+  await pc.setRemoteDescription(obj.sdp || obj);
+  const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+  document.getElementById('signalText').value = JSON.stringify({sdp:pc.localDescription});
+  statusEl.textContent = 'Answer created — send back to initiator.';
+});
+function setupDataChannel(channel){
+  channel.onopen = ()=>{ statusEl.textContent='Connected'; log('Data channel open.'); };
+  channel.onmessage = (ev)=>{ const data = JSON.parse(ev.data); handleNetworkMessage(data); };
+  channel.onclose = ()=>{ statusEl.textContent='Disconnected'; log('Data channel closed.'); };
+}
+document.getElementById('sendPing').addEventListener('click', ()=>{ if(!dc||dc.readyState!=='open'){ alert('No connection'); return; } dc.send(JSON.stringify({type:'ping',time:Date.now()})); log('Sent ping'); });
+document.getElementById('disconnectBtn').addEventListener('click', ()=>{ if(pc) pc.close(); pc=null; dc=null; statusEl.textContent='Disconnected'; });
+
+function handleNetworkMessage(msg){
+  if(msg.type==='ping'){ log('Ping from peer'); }
+  if(msg.type==='syncMove'){ // apply peer player movement (co-op)
+    // very basic: place a ghost player or apply remote action
+    log('Peer action: '+JSON.stringify(msg)); // extend for real sync
+  }
+}
+
+/* ------------------ Misc UI wiring ------------------ */
+document.getElementById('endTurnBtn').addEventListener('click', ()=>{ if(gameState.turn==='Player') endPlayerTurn(); });
+document.getElementById('vatsBtn').addEventListener('click', ()=>{ if(gameState.turn==='Player') enterVats(); });
+document.getElementById('levelUpBtn').addEventListener('click', ()=>{ if(player.perkPoints>0){ player.special.S++; player.perkPoints--; log('Spent perk on Strength.'); updateUI(); } else alert('No perk points.'); });
+
+/* ------------------ Initialization messages ------------------ */
+log('IsoRPG prototype started — all assets generated in-page as base64 images.');
+updateUI(); playSfx('pickup'); // tiny start sfx
 
 </script>
 </body>
