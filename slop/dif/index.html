@@ -1,0 +1,314 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Git Diff Side-by-Side (Helix / P4V style)</title>
+<style>
+  :root{--bg:#0f1720;--panel:#0b1220;--text:#dbe7f5;--muted:#9fb0c6;--add:#213c2b;--add-border:#2d8b5a;--rem:#3b1b20;--rem-border:#c94b4b;--hunk-border:#5b6d80}
+  *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071029, #071827);color:var(--text)}
+  header{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;gap:12px;align-items:center}
+  h1{font-size:16px;margin:0}
+  #controls{display:flex;gap:8px;align-items:center}
+  textarea{width:720px;height:220px;padding:12px;background:#071226;border:1px solid #0b2236;color:var(--text);resize:vertical}
+  button{padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:#0b2340;color:var(--text);cursor:pointer}.layout{display:flex;gap:12px;padding:16px} .viewer{position:relative;flex:1;min-width:600px;height:640px;background:var(--panel);border-radius:8px;padding:12px;overflow:auto} .columns{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:relative} .col{background:linear-gradient(180deg, rgba(255,255,255,0.012), transparent);border-radius:6px;padding:8px;min-width:0} .col .title{font-size:12px;color:var(--muted);padding:6px 8px} .lines{font-family:monospace;font-size:13px;line-height:20px;border-radius:6px;overflow:visible} .line{display:grid;grid-template-columns:40px 1fr;align-items:start;padding:2px 6px} .num{color:var(--muted);font-size:12px;padding-right:8px;text-align:right;user-select:none} .content{white-space:pre-wrap;word-break:break-word;padding-left:8px}
+
+.context{background:transparent} .removed{background:linear-gradient(90deg,var(--rem),transparent);border-left:4px solid var(--rem-border);} .added{background:linear-gradient(90deg,transparent,var(--add));border-left:4px solid var(--add-border);}
+
+/* hunk outline similar to P4V/Helix */ .hunk-block{border:1px solid rgba(255,255,255,0.03);border-radius:8px;margin:6px 0;padding:6px;position:relative} .hunk-block.modified{box-shadow:0 0 0 2px rgba(90,120,160,0.03), 0 6px 18px rgba(2,6,23,0.6)}
+
+/* SVG overlay for connectors */ .overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none} .pair-line{stroke:rgba(200,220,255,0.25);stroke-width:1.6;fill:none} .pair-line.strong{stroke:rgba(80,160,250,0.7);stroke-width:2.4}
+
+/* small placeholder for blank cells */ .placeholder{opacity:0.4;color:var(--muted);font-style:italic}
+
+footer{padding:12px 22px;color:var(--muted);font-size:13px} @media (max-width:900px){textarea{width:100%} .layout{flex-direction:column}} </style>
+
+</head>
+<body>
+<header>
+  <h1>Git Diff Side-by-Side — Paste unified git diff</h1>
+  <div style="flex:1"></div>
+  <div id="controls">
+    <button id="renderBtn">Render</button>
+    <button id="exampleBtn">Load Example</button>
+  </div>
+</header>
+<div class="layout">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <textarea id="diffInput" placeholder="Paste `git diff` (unified diff) output here"></textarea>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="color:var(--muted);font-size:13px">Highlight whitespace changes</label>
+      <input type="checkbox" id="wsToggle" checked />
+    </div>
+  </div>  <div class="viewer" id="viewer">
+    <div class="columns" id="columnsRoot">
+      <div class="col">
+        <div class="title">Old (a)</div>
+        <div class="lines" id="leftLines"></div>
+      </div>
+      <div class="col">
+        <div class="title">New (b)</div>
+        <div class="lines" id="rightLines"></div>
+      </div>
+    </div>
+    <svg class="overlay" id="overlay"></svg>
+  </div>
+</div>
+<footer>Rendered by simple client-side parser. Works best with unified diffs (git diff). Designed to mimic Helix / P4V style pairing.</footer><script>
+// Simple unified diff parser and renderer with visual connectors.
+function parseUnified(diffText){
+  const lines = diffText.replace(/\r\n/g,'\n').split('\n');
+  const files = [];
+  let i=0;
+  while(i<lines.length){
+    const l = lines[i];
+    if(l.startsWith('diff --git')){
+      // new file block
+      const file = {header:[], hunks:[], from:null,to:null};
+      while(i<lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git')){ file.header.push(lines[i]); i++; }
+      // detect --- and +++ lines
+      for(let h of file.header){ if(h.startsWith('--- ')) file.from=h.substring(4).trim(); if(h.startsWith('+++ ')) file.to=h.substring(4).trim(); }
+      // collect hunks
+      while(i<lines.length && lines[i].startsWith('@@')){
+        const meta = lines[i];
+        const m = /@@\s*-(\d+),(\d+)\s*\+(\d+),(\d+)\s*@@/.exec(meta) || /@@\s*-(\d+)(?:,\d+)?\s*\+(\d+)(?:,\d+)?\s*@@/.exec(meta);
+        let oldStart=0, oldCount=0, newStart=0, newCount=0;
+        if(m){ oldStart = parseInt(m[1]); oldCount = parseInt(m[2]||'1'); newStart = parseInt(m[3]||m[2]||'1'); newCount = parseInt(m[4]||'1'); }
+        i++;
+        const hunkLines=[];
+        while(i<lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git')){
+          hunkLines.push(lines[i]); i++; }
+        file.hunks.push({meta,oldStart,oldCount,newStart,newCount,lines:hunkLines});
+      }
+      files.push(file);
+    } else {
+      i++;
+    }
+  }
+  return files;
+}
+
+function render(diffText){
+  const files = parseUnified(diffText);
+  const left = document.getElementById('leftLines');
+  const right = document.getElementById('rightLines');
+  left.innerHTML=''; right.innerHTML='';
+  const pairs = [];
+
+  files.forEach(file=>{
+    const containerL = document.createElement('div'); containerL.className='hunk-block modified';
+    const containerR = document.createElement('div'); containerR.className='hunk-block modified';
+    // header
+    const hdr = document.createElement('div'); hdr.style.fontSize='12px'; hdr.style.color='var(--muted)'; hdr.textContent = (file.from||'a') + ' → ' + (file.to||'b');
+    containerL.appendChild(hdr); containerR.appendChild(hdr.cloneNode(true));
+
+    // iterate hunks
+    file.hunks.forEach(hunk=>{
+      let oldNum = hunk.oldStart;
+      let newNum = hunk.newStart;
+
+      // collect sequences to allow pairing: when a removal line '-' is immediately followed (possibly after several - lines) by addition lines '+' treat them as paired blocks
+      const hLines = hunk.lines;
+      let bufferRem = [];
+      let bufferAdd = [];
+
+      const flushBuffers = ()=>{
+        // if both exist, pair them by order
+        const n = Math.max(bufferRem.length, bufferAdd.length);
+        for(let k=0;k<n;k++){
+          const rem = bufferRem[k];
+          const add = bufferAdd[k];
+          if(rem){
+            const leftRow = makeLineRow(rem.content, oldNum + rem.offset, 'removed');
+            containerL.appendChild(leftRow);
+            left.appendChild(leftRow);
+          }
+          if(!rem && add){
+            // placeholder on left
+            const leftRow = makePlaceholderRow(oldNum, '');
+            containerL.appendChild(leftRow);
+            left.appendChild(leftRow);
+          }
+          if(add){
+            const rightRow = makeLineRow(add.content, newNum + add.offset, 'added');
+            containerR.appendChild(rightRow);
+            right.appendChild(rightRow);
+          }
+          if(!add && rem){
+            const rightRow = makePlaceholderRow(newNum, '');
+            containerR.appendChild(rightRow);
+            right.appendChild(rightRow);
+          }
+          // create pair mapping for connector if both exist
+          if(rem && add){
+            pairs.push({leftEl: left.lastChild, rightEl: right.lastChild});
+          } else if(rem && !add){
+            // lone removal — mark pair to empty (draw small connector)
+            pairs.push({leftEl: left.lastChild, rightEl: null});
+          } else if(!rem && add){
+            pairs.push({leftEl: null, rightEl: right.lastChild});
+          }
+          if(rem) oldNum = oldNum + 1;
+          if(add) newNum = newNum + 1;
+        }
+        bufferRem=[]; bufferAdd=[];
+      };
+
+      // iterate hunk lines and build buffers
+      for(let idx=0;idx<hLines.length;idx++){
+        const raw = hLines[idx];
+        if(raw.startsWith('-')){ bufferRem.push({content:raw.substring(1),offset:0}); }
+        else if(raw.startsWith('+')){ bufferAdd.push({content:raw.substring(1),offset:0}); }
+        else if(raw.startsWith(' ')){
+          // flush any pending buffers first
+          if(bufferRem.length||bufferAdd.length) flushBuffers();
+          // context line: add to both
+          const leftRow = makeLineRow(raw.substring(1), oldNum, 'context');
+          const rightRow = makeLineRow(raw.substring(1), newNum, 'context');
+          containerL.appendChild(leftRow); containerR.appendChild(rightRow);
+          left.appendChild(leftRow); right.appendChild(rightRow);
+          pairs.push({leftEl:left.lastChild, rightEl:right.lastChild});
+          oldNum++; newNum++;
+        } else {
+          // other lines (\ No newline at end...) - treat as context
+          if(bufferRem.length||bufferAdd.length) flushBuffers();
+          const leftRow = makeLineRow(raw, oldNum, 'context');
+          const rightRow = makeLineRow(raw, newNum, 'context');
+          containerL.appendChild(leftRow); containerR.appendChild(rightRow);
+          left.appendChild(leftRow); right.appendChild(rightRow);
+          pairs.push({leftEl:left.lastChild, rightEl:right.lastChild});
+        }
+      }
+      if(bufferRem.length||bufferAdd.length) flushBuffers();
+    });
+
+    // after file, add a small spacer
+    const sepL = document.createElement('div'); sepL.style.height='8px'; left.appendChild(sepL);
+    const sepR = document.createElement('div'); sepR.style.height='8px'; right.appendChild(sepR);
+  });
+
+  // wrap rows into blocks: we already appended rows to left/right. Now outline hunks visually by grouping contiguous modified lines
+  outlineHunks(left); outlineHunks(right);
+  requestAnimationFrame(()=>drawPairs(pairs));
+}
+
+function makeLineRow(text, num, type){
+  const row = document.createElement('div'); row.className='line '+(type==='context'? 'context' : type);
+  const numNode = document.createElement('div'); numNode.className='num'; numNode.textContent = (Number.isFinite(num) ? num : '');
+  const content = document.createElement('div'); content.className='content'; content.textContent = text || '';
+  row.appendChild(numNode); row.appendChild(content);
+  return row;
+}
+function makePlaceholderRow(num,text){
+  const row = document.createElement('div'); row.className='line';
+  const numNode = document.createElement('div'); numNode.className='num'; numNode.textContent = (Number.isFinite(num) ? num : '');
+  const content = document.createElement('div'); content.className='content placeholder'; content.textContent = text || '';
+  row.appendChild(numNode); row.appendChild(content);
+  return row;
+}
+
+function outlineHunks(container){
+  // add an outline wrapper around contiguous blocks of non-context lines to mimic P4V/Helix
+  const children = Array.from(container.children);
+  let startIdx = null;
+  for(let i=0;i<children.length;i++){
+    const el = children[i];
+    const isContext = el.classList && el.classList.contains('context');
+    if(!isContext && startIdx===null) startIdx=i;
+    if((isContext || i===children.length-1) && startIdx!==null){
+      let endIdx = isContext ? i-1 : i;
+      // wrap elements startIdx..endIdx into a block
+      const block = document.createElement('div'); block.className='hunk-block modified';
+      for(let k=startIdx;k<=endIdx;k++) block.appendChild(children[k].cloneNode(true));
+      // replace originals with single block node
+      // remove original elements
+      for(let k=startIdx;k<=endIdx;k++){ container.removeChild(children[k]); }
+      // insert block at startIdx
+      if(container.children.length>=startIdx) container.insertBefore(block, container.children[startIdx] || null);
+      // recompute children and indexes
+      return outlineHunks(container);
+    }
+  }
+}
+
+function drawPairs(pairs){
+  const svg = document.getElementById('overlay');
+  const viewer = document.getElementById('viewer');
+  const columns = document.getElementById('columnsRoot');
+  const rect = viewer.getBoundingClientRect();
+  svg.setAttribute('width', rect.width); svg.setAttribute('height', rect.height);
+  svg.innerHTML='';
+  pairs.forEach(p=>{
+    const leftEl = p.leftEl;
+    const rightEl = p.rightEl;
+    if(leftEl && rightEl){
+      const lRect = leftEl.getBoundingClientRect();
+      const rRect = rightEl.getBoundingClientRect();
+      const start = {x: lRect.right - rect.left - 6, y: lRect.top - rect.top + lRect.height/2};
+      const end = {x: rRect.left - rect.left + 6, y: rRect.top - rect.top + rRect.height/2};
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      const dx = Math.max(20, Math.abs(end.x-start.x)/2);
+      const d = `M ${start.x} ${start.y} C ${start.x+dx} ${start.y} ${end.x-dx} ${end.y} ${end.x} ${end.y}`;
+      path.setAttribute('d',d);
+      path.classList.add('pair-line');
+      svg.appendChild(path);
+    } else if(leftEl && !rightEl){
+      const lRect = leftEl.getBoundingClientRect();
+      const start = {x: lRect.right - rect.left - 6, y: lRect.top - rect.top + lRect.height/2};
+      const path = document.createElementNS('http://www.w3.org/2000/svg','line');
+      path.setAttribute('x1', start.x); path.setAttribute('y1', start.y);
+      path.setAttribute('x2', start.x+24); path.setAttribute('y2', start.y);
+      path.classList.add('pair-line'); svg.appendChild(path);
+    } else if(!leftEl && rightEl){
+      const rRect = rightEl.getBoundingClientRect();
+      const end = {x: rRect.left - rect.left + 6, y: rRect.top - rect.top + rRect.height/2};
+      const path = document.createElementNS('http://www.w3.org/2000/svg','line');
+      path.setAttribute('x1', end.x-24); path.setAttribute('y1', end.y);
+      path.setAttribute('x2', end.x); path.setAttribute('y2', end.y);
+      path.classList.add('pair-line'); svg.appendChild(path);
+    }
+  });
+}
+
+// mouse/resize handling
+window.addEventListener('resize', ()=>{ requestAnimationFrame(()=>{
+  // recompute
+  // find all pairs from DOM: brute-force by matching order
+  const leftItems = Array.from(document.getElementById('leftLines').children);
+  const rightItems = Array.from(document.getElementById('rightLines').children);
+  const pairs = [];
+  const n = Math.max(leftItems.length, rightItems.length);
+  for(let i=0;i<n;i++) pairs.push({leftEl:leftItems[i]||null,rightEl:rightItems[i]||null});
+  drawPairs(pairs);
+})});
+
+// helpers for demo
+document.getElementById('renderBtn').addEventListener('click', ()=>{
+  render(document.getElementById('diffInput').value);
+});
+document.getElementById('exampleBtn').addEventListener('click', ()=>{
+  const example = `diff --git a/src/app.js b/src/app.js
+index 5d6f8c1..a9b7f21 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -10,7 +10,8 @@ function greet(name) {
+-  console.log('Hello, ' + name);
++  // greeting changed to template string
++  console.log(`Hello, ${name}!`);
+ }
+@@ -30,3 +31,6 @@ function compute(x){
+-  return x * x;
++  // improved computation
++  let y = x * x;
++  return y;
+ }
+`;
+  document.getElementById('diffInput').value = example;
+});
+
+// initial example
+document.getElementById('exampleBtn').click();
+</script></body>
+</html>
