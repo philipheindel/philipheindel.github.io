@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>P4V-style Side-by-side Git Diff Viewer</title>
+<style>
+  :root{
+    --bg:#0f1720; --pane-bg:#0b1220; --gutter:#0c1420;
+    --text:#e6eef6; --muted:#98a6b8;
+    --added-bg:#133a17; --removed-bg:#3d1414; --modified-bg:#2f2b17;
+    --connector: rgba(200,200,255,0.12);
+    --outline: rgba(200,200,255,0.08);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#06101a, #08131a); color:var(--text)}
+  .app {display:flex;flex-direction:column;height:100vh;gap:8px;padding:12px;}
+  .toolbar{display:flex;gap:8px;align-items:center}
+  .toolbar textarea{width:460px;height:88px;font-family:monospace;font-size:12px;padding:8px}
+  .toolbar button, .toolbar input[type=file], .toolbar label{
+    background:#0f1726;color:var(--text);border:1px solid rgba(255,255,255,0.04);
+    padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;
+  }
+  .toolbar .opts{margin-left:auto;display:flex;gap:8px;align-items:center;}
+  .container {flex:1;display:flex;background:var(--pane-bg);border-radius:8px;overflow:hidden;position:relative}
+  .pane {flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  .pane-header{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.02);font-weight:600}
+  .filespec{font-size:13px;color:var(--muted)}
+  .content-row{display:flex;flex:1;min-height:0;position:relative}
+  .gutter{width:60px;background:var(--gutter);padding:6px 8px;border-right:1px solid rgba(255,255,255,0.02);overflow:hidden;box-sizing:border-box;font-size:12px;color:var(--muted)}
+  .lines{flex:1;overflow:auto;padding:6px 12px;font-family:monospace;font-size:13px;line-height:20px;white-space:pre;position:relative}
+  .line{display:flex;padding:0 4px;align-items:flex-start}
+  .ln{width:48px;text-align:right;padding-right:8px;color:var(--muted);user-select:none}
+  .code{flex:1}
+  .unchanged {background:transparent}
+  .added {background:linear-gradient(90deg,var(--added-bg), rgba(19,58,23,0.06));color:#d6ffdc}
+  .removed {background:linear-gradient(90deg,var(--removed-bg), rgba(61,20,20,0.04));color:#ffd6d6}
+  .modified {background:linear-gradient(90deg,var(--modified-bg), rgba(47,43,23,0.04));}
+  .char-add {background:rgba(60,200,120,0.18);border-radius:3px;padding:0 2px}
+  .char-rem {background:rgba(200,80,80,0.14);text-decoration:line-through;border-radius:3px;padding:0 2px}
+  .hunk-outline {position:absolute;border:1px dashed var(--outline);pointer-events:none;border-radius:4px}
+  /* connectors SVG sits above panes */
+  svg.connectors {position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:6}
+  .collapsed-toggle{font-size:13px;color:var(--muted);cursor:pointer}
+  .controls{display:flex;gap:8px}
+  .file-tabs{display:flex;gap:6px;padding:8px;background:rgba(255,255,255,0.01);border-bottom:1px solid rgba(255,255,255,0.02)}
+  .tab{padding:6px 10px;border-radius:6px;cursor:pointer;background:transparent;color:var(--muted)}
+  .tab.active{background:rgba(255,255,255,0.02);color:var(--text);font-weight:600}
+  .footer{font-size:12px;color:var(--muted);padding:8px}
+  input[type=file]{display:none}
+  .file-drop {flex:1;display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;border:1px dashed rgba(255,255,255,0.03);min-height:84px}
+  .small{font-size:12px}
+  /* responsive */
+  @media (max-width:900px){
+    .toolbar textarea{width:280px}
+    .gutter{width:48px}
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="file-drop" id="dropzone">
+          <div style="display:flex;flex-direction:column">
+            <div style="font-weight:700">Paste `git diff` output or drop a .diff file here</div>
+            <div class="small" style="color:var(--muted)">Supports unified diff produced by `git diff` (or `git show`) — multiple files allowed.</div>
+          </div>
+          <div style="margin-left:16px">
+            <label for="fileinput">Open .diff</label>
+            <input id="fileinput" type="file" accept=".diff,.patch,text/plain" />
+          </div>
+        </div>
+        <textarea id="raw" placeholder="Paste `git diff` output here..." spellcheck="false"></textarea>
+      </div>
+
+      <div class="opts">
+        <button id="render">Render Diff</button>
+        <div class="controls">
+          <label class="collapsed-toggle"><input id="collapseToggle" type="checkbox" /> Collapse unchanged</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="container" id="viewer" aria-hidden="true">
+      <!-- file tabs -->
+      <div style="position:absolute;left:0;right:0;top:44px;z-index:7">
+        <div class="file-tabs" id="fileTabs"></div>
+      </div>
+
+      <svg class="connectors" id="connectors"></svg>
+
+      <div class="pane" id="leftPane">
+        <div class="pane-header">
+          <div id="leftHeader" class="filespec">Old file</div>
+        </div>
+        <div class="content-row">
+          <div class="gutter" id="leftGutter" style="overflow:hidden"></div>
+          <div class="lines" id="leftLines"></div>
+        </div>
+      </div>
+
+      <div class="pane" id="rightPane">
+        <div class="pane-header">
+          <div id="rightHeader" class="filespec">New file</div>
+        </div>
+        <div class="content-row">
+          <div class="gutter" id="rightGutter" style="overflow:hidden"></div>
+          <div class="lines" id="rightLines"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      Tip: use the "Collapse unchanged" checkbox to hide large unchanged regions. Character-level diffs are highlighted inside modified lines.
+    </div>
+  </div>
+
+<script>
+/*
+Client-side P4V-style diff viewer
+- Parses unified diff
+- Builds line lists for old/new
+- Detects line status: context (unchanged), removed, added, modified (when both present at same hunk lines)
+- Renders lines into two synchronized scrollable panes
+- Draws connectors between hunk rectangles using SVG paths
+- Performs character-level diff for modified lines (LCS-based)
+*/
+
+// ---------- Utilities ----------
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function lcs(a,b){
+  // simple DP LCS for strings -> returns arrays of indices for a and b matching LCS
+  const n=a.length, m=b.length;
+  const dp = Array.from({length:n+1}, ()=> new Array(m+1).fill(0));
+  for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--) dp[i][j] = a[i]===b[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  // reconstruct
+  let i=0,j=0; const resA=[], resB=[];
+  while(i<n && j<m){
+    if(a[i]===b[j]){ resA.push(i); resB.push(j); i++; j++; }
+    else if(dp[i+1][j] >= dp[i][j+1]) i++;
+    else j++;
+  }
+  return {ia:resA, ib:resB};
+}
+
+function charDiffHighlight(oldStr, newStr){
+  // Return HTML for old and new with <span class="char-rem"> and <span class="char-add">
+  const oa = oldStr.split(''), nb = newStr.split('');
+  const {ia, ib} = lcs(oa, nb);
+  const keepA = new Set(ia), keepB = new Set(ib);
+  // build old
+  let oldOut='';
+  for(let i=0;i<oa.length;i++){
+    if(keepA.has(i)) oldOut += escapeHtml(oa[i]);
+    else oldOut += '<span class="char-rem">'+escapeHtml(oa[i])+'</span>';
+  }
+  // build new
+  let newOut='';
+  for(let i=0;i<nb.length;i++){
+    if(keepB.has(i)) newOut += escapeHtml(nb[i]);
+    else newOut += '<span class="char-add">'+escapeHtml(nb[i])+'</span>';
+  }
+  return {oldOut, newOut};
+}
+
+// ---------- Diff Parsing ----------
+function parseUnifiedDiff(text){
+  // returns array of file diffs: {oldFilename, newFilename, hunks: [{oldStart,oldCount,newStart,newCount, lines: [{type, text}]}]}
+  const lines = text.replace(/\r\n/g,"\n").split('\n');
+  const files = [];
+  let i=0;
+  while(i<lines.length){
+    if(lines[i].startsWith('diff ') || lines[i].startsWith('*** ') || lines[i].startsWith('Index:')){
+      // skip header lines until --- a/... +++ b/...
+      // we allow either git diff format or patch format
+      // find next --- / +++
+      let headerLines=[];
+      while(i<lines.length && !lines[i].startsWith('--- ') && !lines[i].startsWith('*** ')) { headerLines.push(lines[i]); i++; }
+      // now expect --- and +++
+      if(i<lines.length && (lines[i].startsWith('--- ') || lines[i].startsWith('*** '))){
+        const oldLine = lines[i++].replace(/^---\s+/, '').replace(/^\*\*\*\s+/, '');
+        if(i<lines.length && (lines[i].startsWith('+++ ') || lines[i].startsWith('*** '))){
+          const newLine = lines[i++].replace(/^\+\+\+\s+/, '').replace(/^\*\*\*\s+/, '');
+          const f = {oldFilename:oldLine.trim(), newFilename:newLine.trim(), hunks:[], header: headerLines.join('\n')};
+          // parse hunks
+          while(i<lines.length && lines[i].startsWith('@@')){
+            // hunk header
+            const m = lines[i].match(/^@@\s*-(\d+),?(\d*)\s*\+(\d+),?(\d*)\s*@@/);
+            if(!m){ i++; continue; }
+            const oldStart = parseInt(m[1],10), oldCount=(m[2]===''?1:parseInt(m[2]||'1',10));
+            const newStart = parseInt(m[3],10), newCount=(m[4]===''?1:parseInt(m[4]||'1',10));
+            i++;
+            const hunkLines = [];
+            while(i<lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff ') && !lines[i].startsWith('--- ') && !lines[i].startsWith('Index:')){
+              const ln = lines[i];
+              if(ln.length===0){ hunkLines.push({type:'context', text:''}); i++; continue; }
+              const c = ln[0];
+              if(c === ' ') hunkLines.push({type:'context', text:ln.slice(1)});
+              else if(c === '+') hunkLines.push({type:'add', text:ln.slice(1)});
+              else if(c === '-') hunkLines.push({type:'del', text:ln.slice(1)});
+              else hunkLines.push({type:'context', text:ln});
+              i++;
+            }
+            f.hunks.push({oldStart, oldCount, newStart, newCount, lines:hunkLines});
+          }
+          files.push(f);
+        }
+      } else {
+        // if no --- +++, keep moving
+        i++;
+      }
+    } else if(lines[i].startsWith('--- ') || lines[i].startsWith('*** ')){
+      const oldLine = lines[i++].replace(/^---\s+/, '').replace(/^\*\*\*\s+/, '');
+      if(i<lines.length && (lines[i].startsWith('+++ ') || lines[i].startsWith('*** '))){
+        const newLine = lines[i++].replace(/^\+\+\+\s+/, '').replace(/^\*\*\*\s+/, '');
+        const f = {oldFilename:oldLine.trim(), newFilename:newLine.trim(), hunks:[]};
+        while(i<lines.length && lines[i].startsWith('@@')){
+          const m = lines[i].match(/^@@\s*-(\d+),?(\d*)\s*\+(\d+),?(\d*)\s*@@/);
+          if(!m){ i++; continue; }
+          const oldStart = parseInt(m[1],10), oldCount=(m[2]===''?1:parseInt(m[2]||'1',10));
+          const newStart = parseInt(m[3],10), newCount=(m[4]===''?1:parseInt(m[4]||'1',10));
+          i++;
+          const hunkLines = [];
+          while(i<lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff ') && !lines[i].startsWith('--- ') && !lines[i].startsWith('Index:')){
+            const ln = lines[i];
+            if(ln.length===0){ hunkLines.push({type:'context', text:''}); i++; continue; }
+            const c = ln[0];
+            if(c === ' ') hunkLines.push({type:'context', text:ln.slice(1)});
+            else if(c === '+') hunkLines.push({type:'add', text:ln.slice(1)});
+            else if(c === '-') hunkLines.push({type:'del', text:ln.slice(1)});
+            else hunkLines.push({type:'context', text:ln});
+            i++;
+          }
+          f.hunks.push({oldStart, oldCount, newStart, newCount, lines:hunkLines});
+        }
+        files.push(f);
+      } else {
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+  return files;
+}
+
+// ---------- Build linear old/new arrays with metadata ----------
+function buildLineArrays(file){
+  // Return {oldLines: [{num,text,status,origIndex}], newLines: [...], hunksMeta: [...]}
+  // statuses: 'context','removed','added'
+  const oldLines = [], newLines = [];
+  let oldNumCursor = 1, newNumCursor = 1;
+
+  // To fill with gaps between hunks, we use the hunk start positions
+  // We'll iterate each hunk and push preceding unchanged lines as context placeholders (empty) if needed.
+  // But unified diff contains only the hunks, not full file; we will only render hunks and context inside them.
+  const hunksMeta = []; // store the rendered line indices mapping for connector bounding boxes
+
+  for(const hunk of file.hunks){
+    // For each hunk, iterate its lines and push entries to old/new arrays
+    const meta = {oldStartLineIndex: oldLines.length, newStartLineIndex: newLines.length, oldLineCount:0, newLineCount:0, lines:[]};
+    let oNum = hunk.oldStart, nNum = hunk.newStart;
+    for(const ln of hunk.lines){
+      if(ln.type === 'context'){
+        oldLines.push({num:oNum++, text:ln.text, status:'context'});
+        newLines.push({num:nNum++, text:ln.text, status:'context'});
+        meta.oldLineCount++; meta.newLineCount++;
+        meta.lines.push({type:'context'});
+      } else if(ln.type === 'del'){
+        oldLines.push({num:oNum++, text:ln.text, status:'removed'});
+        meta.oldLineCount++;
+        meta.lines.push({type:'del'});
+      } else if(ln.type === 'add'){
+        newLines.push({num:nNum++, text:ln.text, status:'added'});
+        meta.newLineCount++;
+        meta.lines.push({type:'add'});
+      }
+    }
+    hunksMeta.push(meta);
+  }
+  return {oldLines, newLines, hunksMeta};
+}
+
+// ---------- Rendering ----------
+const viewer = document.getElementById('viewer');
+const leftLinesEl = document.getElementById('leftLines'), rightLinesEl = document.getElementById('rightLines');
+const leftGutter = document.getElementById('leftGutter'), rightGutter = document.getElementById('rightGutter');
+const leftHeader = document.getElementById('leftHeader'), rightHeader = document.getElementById('rightHeader');
+const connectorsSVG = document.getElementById('connectors');
+const fileTabs = document.getElementById('fileTabs');
+let currentFiles = [], currentFileIndex = 0;
+let cachedRenderRects = null;
+
+function clearViewer(){ leftLinesEl.innerHTML=''; rightLinesEl.innerHTML=''; leftGutter.innerHTML=''; rightGutter.innerHTML=''; connectorsSVG.innerHTML=''; fileTabs.innerHTML=''; cachedRenderRects = null; }
+
+function renderFiles(files){
+  currentFiles = files;
+  clearViewer();
+  if(!files.length){ viewer.style.display='none'; return; }
+  viewer.style.display='flex';
+  // create tabs
+  files.forEach((f, idx)=>{
+    const t = document.createElement('div');
+    t.className = 'tab' + (idx===0?' active':'');
+    t.textContent = `${f.oldFilename} → ${f.newFilename}`;
+    t.onclick = ()=>{ selectFile(idx); };
+    fileTabs.appendChild(t);
+  });
+  selectFile(0);
+}
+
+function selectFile(idx){
+  currentFileIndex = idx;
+  // highlight tab
+  Array.from(fileTabs.children).forEach((c,i)=>c.className='tab'+(i===idx?' active':''));
+  const f = currentFiles[idx];
+  leftHeader.textContent = f.oldFilename || 'Old';
+  rightHeader.textContent = f.newFilename || 'New';
+  renderFileDiff(f);
+}
+
+function renderFileDiff(file){
+  leftLinesEl.innerHTML=''; rightLinesEl.innerHTML=''; leftGutter.innerHTML=''; rightGutter.innerHTML=''; connectorsSVG.innerHTML='';
+  cachedRenderRects = {hunks:[]};
+  const {oldLines, newLines, hunksMeta} = buildLineArrays(file);
+
+  // Build a mapping of linear display rows for each pane.
+  // We'll render sequentially: iterate hunks and create contiguous blocks containing lines for each pane.
+  // Also we support "collapse unchanged" by hiding context-only lines outside a small context radius (3).
+  const collapse = document.getElementById('collapseToggle').checked;
+  const CONTEXT = 3;
+
+  // For each hunk, we render the hunk block (including context lines preserved).
+  let leftRowIndex = 0, rightRowIndex = 0;
+  for(const [hidx, hmeta] of hunksMeta.entries()){
+    // hmeta.oldStartLineIndex etc give starting indices in the arrays created earlier
+    // Determine which context lines are "context" vs changed, and implement collapsing.
+    // We'll create arrays of line objects for this hunk for each pane separately
+    // Build arrays by iterating the hunk lines sequence (we saved only type lines, but easier: slice arrays)
+    const oldSlice = oldLines.slice(hmeta.oldStartLineIndex, hmeta.oldStartLineIndex + hmeta.oldLineCount);
+    const newSlice = newLines.slice(hmeta.newStartLineIndex, hmeta.newStartLineIndex + hmeta.newLineCount);
+
+    // For both slices, we'll mark each line with a global status: context/removed/added/modified
+    // But modified lines are represented as a removed followed by added in the same region.
+    // We'll attempt to align removed and added to label them as 'modified' when they appear adjacent.
+    // Simpler approach: produce line sequences for display preserving original order but when a removed line
+    // is followed by an added line with similar lengths we'll treat them as "paired modified".
+    // Create stacks:
+    const displayOld = [], displayNew = [];
+    // Use pointers over hunk.lines (type sequence)
+    // Build sequences preserving positions. We'll also pair deletions and additions into modified pairs in order.
+    let oIdx = 0, nIdx = 0;
+    // We need a representation of hunk lines with actual content. We reconstruct by scanning the hunk lines stored earlier
+    // But we didn't keep the sequence explicitly in hmeta.lines; we have it. Let's use file.hunks to get that hunk
+    const rawHunk = file.hunks[hidx];
+    const seq = rawHunk.lines; // objects with type and text
+    // We'll build arrays of items with type and content and then align.
+    const oldQueue = [], newQueue = [];
+    for(const item of seq){
+      if(item.type === 'context'){ oldQueue.push({type:'context', text:item.text}); newQueue.push({type:'context', text:item.text}); }
+      else if(item.type === 'del') oldQueue.push({type:'del', text:item.text});
+      else if(item.type === 'add') newQueue.push({type:'add', text:item.text});
+    }
+    // Align by walking through sequence and pairing runs of deletes with runs of adds
+    let oi=0, ni=0;
+    while(oi<oldQueue.length || ni<newQueue.length){
+      // if both present and both context -> emit context
+      if(oi<oldQueue.length && oldQueue[oi].type==='context' && ni<newQueue.length && newQueue[ni].type==='context'){
+        displayOld.push({...oldQueue[oi], status:'context'}); oi++;
+        displayNew.push({...newQueue[ni], status:'context'}); ni++;
+      } else {
+        // collect consecutive deletes and adds
+        const dels = [];
+        while(oi<oldQueue.length && oldQueue[oi].type==='del'){ dels.push(oldQueue[oi]); oi++; }
+        const adds = [];
+        while(ni<newQueue.length && newQueue[ni].type==='add'){ adds.push(newQueue[ni]); ni++; }
+        if(dels.length && adds.length){
+          // pair them as modified pairs; we will produce lines in both panes representing pairing
+          const maxn = Math.max(dels.length, adds.length);
+          for(let k=0;k<maxn;k++){
+            displayOld.push(dels[k] ? {...dels[k], status:'removed'} : {type:'context', text:'', status:'context'});
+            displayNew.push(adds[k] ? {...adds[k], status:'added'} : {type:'context', text:'', status:'context'});
+          }
+        } else if(dels.length){
+          for(const d of dels) displayOld.push({...d, status:'removed'});
+        } else if(adds.length){
+          for(const a of adds) displayNew.push({...a, status:'added'});
+        } else {
+          // If one side still has context lines unmatched
+          if(oi<oldQueue.length && oldQueue[oi].type==='context'){ displayOld.push({...oldQueue[oi], status:'context'}); oi++; }
+          if(ni<newQueue.length && newQueue[ni].type==='context'){ displayNew.push({...newQueue[ni], status:'context'}); ni++; }
+        }
+      }
+    }
+
+    // Now we have two arrays displayOld and displayNew aligned by display index
+    // Determine collapsed ranges if collapse enabled
+    const len = Math.max(displayOld.length, displayNew.length);
+    const toRender = [];
+    for(let r=0;r<len;r++){
+      const o = displayOld[r] || {status:'context', text:''};
+      const n = displayNew[r] || {status:'context', text:''};
+      // decide if this row is "changed" (added/removed) or context only
+      const changed = (o.status !== 'context') || (n.status !== 'context');
+      toRender.push({old:o, new:n, changed});
+    }
+    // Optionally collapse leading/trailing unchanged lines inside the hunk
+    let firstChanged = 0, lastChanged = toRender.length-1;
+    for(let t=0;t<toRender.length;t++){ if(toRender[t].changed){ firstChanged = t; break; } }
+    for(let t=toRender.length-1;t>=0;t--){ if(toRender[t].changed){ lastChanged = t; break; } }
+
+    // Build DOM elements for this hunk; measure bounding boxes for connectors after layout
+    const hunkStartLeft = leftLinesEl.children.length;
+    const hunkStartRight = rightLinesEl.children.length;
+
+    for(let r=0;r<toRender.length;r++){
+      const row = toRender[r];
+      const isContext = !row.changed;
+      const showRow = !collapse || (r <= firstChanged+CONTEXT-1) || (r >= lastChanged-CONTEXT+1) || row.changed;
+      if(!showRow){
+        // render collapsed placeholder once at collapse boundary
+        if(r === firstChanged+CONTEXT){
+          const mini = document.createElement('div');
+          mini.className='line unchanged';
+          mini.style.opacity=0.6;
+          mini.innerHTML = '<div class="ln">…</div><div class="code"><span style="color:var(--muted)">… collapsed unchanged …</span></div>';
+          leftLinesEl.appendChild(mini.cloneNode(true));
+          rightLinesEl.appendChild(mini.cloneNode(true));
+        }
+        continue;
+      }
+      // left row
+      const leftRow = document.createElement('div'); leftRow.className='line';
+      const lnum = document.createElement('div'); lnum.className='ln'; lnum.textContent = row.old.num || '';
+      const lcode = document.createElement('div'); lcode.className='code';
+      if(row.old.status === 'removed') { leftRow.classList.add('removed'); lcode.innerHTML = escapeHtml(row.old.text); }
+      else if(row.old.status === 'context') { leftRow.classList.add('unchanged'); lcode.innerHTML = escapeHtml(row.old.text); }
+      else { leftRow.classList.add('unchanged'); lcode.innerHTML = ''; }
+      if(row.old.status === 'removed' && row.new.status === 'added'){
+        // modified pair - do char-diff highlight
+        const {oldOut} = charDiffHighlight(row.old.text, row.new.text);
+        leftRow.classList.add('modified'); lcode.innerHTML = oldOut;
+      }
+      leftRow.appendChild(lnum); leftRow.appendChild(lcode);
+      leftLinesEl.appendChild(leftRow);
+
+      // right row
+      const rightRow = document.createElement('div'); rightRow.className='line';
+      const rnum = document.createElement('div'); rnum.className='ln'; rnum.textContent = row.new.num || '';
+      const rcode = document.createElement('div'); rcode.className='code';
+      if(row.new.status === 'added') { rightRow.classList.add('added'); rcode.innerHTML = escapeHtml(row.new.text); }
+      else if(row.new.status === 'context') { rightRow.classList.add('unchanged'); rcode.innerHTML = escapeHtml(row.new.text); }
+      else { rightRow.classList.add('unchanged'); rcode.innerHTML = ''; }
+
+      if(row.old.status === 'removed' && row.new.status === 'added'){
+        // modified pair - do char diff for new
+        const {newOut} = charDiffHighlight(row.old.text, row.new.text);
+        rightRow.classList.add('modified'); rcode.innerHTML = newOut;
+      }
+      rightRow.appendChild(rnum); rightRow.appendChild(rcode);
+      rightLinesEl.appendChild(rightRow);
+
+      leftRowIndex++; rightRowIndex++;
+    }
+
+    const hunkEndLeft = leftLinesEl.children.length;
+    const hunkEndRight = rightLinesEl.children.length;
+    cachedRenderRects.hunks.push({leftStartIndex:hunkStartLeft, leftEndIndex:hunkEndLeft, rightStartIndex:hunkStartRight, rightEndIndex:hunkEndRight});
+  }
+
+  // fill gutters
+  populateGutters();
+
+  // after layout, draw connectors for each hunk
+  requestAnimationFrame(drawConnectors);
+}
+
+// populate line number gutters based on rendered line elements
+function populateGutters(){
+  leftGutter.innerHTML=''; rightGutter.innerHTML='';
+  for(const ln of leftLinesEl.children){
+    const g = document.createElement('div'); g.style.height = getComputedStyle(ln).lineHeight || '20px';
+    const num = ln.querySelector('.ln') ? ln.querySelector('.ln').textContent : '';
+    g.innerHTML = `<div style="height:20px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:var(--muted);font-size:12px">${num||''}</div>`;
+    leftGutter.appendChild(g);
+  }
+  for(const ln of rightLinesEl.children){
+    const g = document.createElement('div'); g.style.height = getComputedStyle(ln).lineHeight || '20px';
+    const num = ln.querySelector('.ln') ? ln.querySelector('.ln').textContent : '';
+    g.innerHTML = `<div style="height:20px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:var(--muted);font-size:12px">${num||''}</div>`;
+    rightGutter.appendChild(g);
+  }
+}
+
+// ---------- Connectors ----------
+function drawConnectors(){
+  connectorsSVG.innerHTML = '';
+  const leftRect = leftLinesEl.getBoundingClientRect(), rightRect = rightLinesEl.getBoundingClientRect();
+  const parentRect = viewer.getBoundingClientRect();
+  // create SVG dimensions to match viewer size
+  connectorsSVG.setAttribute('width', parentRect.width);
+  connectorsSVG.setAttribute('height', parentRect.height);
+
+  // for each hunk, compute bounding rectangles for the hunk in left and right panes
+  for(const h of cachedRenderRects.hunks){
+    // compute DOM elements for top and bottom of left region
+    const leftTopEl = leftLinesEl.children[h.leftStartIndex];
+    const leftBottomEl = leftLinesEl.children[Math.max(h.leftEndIndex-1, h.leftStartIndex)];
+    const rightTopEl = rightLinesEl.children[h.rightStartIndex];
+    const rightBottomEl = rightLinesEl.children[Math.max(h.rightEndIndex-1, h.rightStartIndex)];
+    if(!leftTopEl || !leftBottomEl || !rightTopEl || !rightBottomEl) continue;
+    const lt = leftTopEl.getBoundingClientRect(), lb = leftBottomEl.getBoundingClientRect();
+    const rt = rightTopEl.getBoundingClientRect(), rb = rightBottomEl.getBoundingClientRect();
+
+    // SVG coordinates relative to parent
+    const leftBox = {x: lt.left - parentRect.left, y: lt.top - parentRect.top, w: lt.width, h: (lb.bottom - lt.top)};
+    const rightBox = {x: rt.left - parentRect.left, y: rt.top - parentRect.top, w: rt.width, h: (rb.bottom - rt.top)};
+
+    // draw faint rectangle outlines on both sides
+    const outlineLeft = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    outlineLeft.setAttribute('x', leftBox.x+4);
+    outlineLeft.setAttribute('y', leftBox.y+2);
+    outlineLeft.setAttribute('width', leftBox.w-8);
+    outlineLeft.setAttribute('height', Math.max(6,leftBox.h-4));
+    outlineLeft.setAttribute('fill','none');
+    outlineLeft.setAttribute('stroke','rgba(200,200,255,0.06)');
+    outlineLeft.setAttribute('stroke-dasharray','4 4');
+    connectorsSVG.appendChild(outlineLeft);
+
+    const outlineRight = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    outlineRight.setAttribute('x', rightBox.x+4);
+    outlineRight.setAttribute('y', rightBox.y+2);
+    outlineRight.setAttribute('width', rightBox.w-8);
+    outlineRight.setAttribute('height', Math.max(6,rightBox.h-4));
+    outlineRight.setAttribute('fill','none');
+    outlineRight.setAttribute('stroke','rgba(200,200,255,0.06)');
+    outlineRight.setAttribute('stroke-dasharray','4 4');
+    connectorsSVG.appendChild(outlineRight);
+
+    // draw connectors: a smooth bezier path from left box center to right box center
+    const y1 = leftBox.y + leftBox.h/2;
+    const y2 = rightBox.y + rightBox.h/2;
+    const x1 = leftBox.x + leftBox.w + 2;
+    const x2 = rightBox.x - 2;
+    const midpoint = (x1 + x2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const d = `M ${x1} ${y1} C ${midpoint} ${y1} ${midpoint} ${y2} ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('stroke','rgba(180,200,255,0.12)');
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke-width','14');
+    path.setAttribute('stroke-linecap','round');
+    path.setAttribute('opacity','0.8');
+    connectorsSVG.appendChild(path);
+
+    // lighter inner stroke
+    const path2 = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path2.setAttribute('d', d);
+    path2.setAttribute('stroke','rgba(200,220,255,0.16)');
+    path2.setAttribute('fill','none');
+    path2.setAttribute('stroke-width','2');
+    path2.setAttribute('stroke-linecap','round');
+    connectorsSVG.appendChild(path2);
+  }
+}
+
+// ---------- Scroll sync ----------
+function syncScroll(a, b){
+  b.scrollTop = a.scrollTop;
+  b.scrollLeft = a.scrollLeft;
+  // drawers respond to scroll via requestAnimationFrame drawConnectors
+  requestAnimationFrame(drawConnectors);
+}
+
+leftLinesEl.addEventListener('scroll', ()=> syncScroll(leftLinesEl, rightLinesEl));
+rightLinesEl.addEventListener('scroll', ()=> syncScroll(rightLinesEl, leftLinesEl));
+
+// Clicking a line to highlight corresponding region (optional)
+leftLinesEl.addEventListener('click', (ev)=>{
+  const row = ev.target.closest('.line');
+  if(!row) return;
+  // find index and scroll both to align
+  const idx = Array.prototype.indexOf.call(leftLinesEl.children, row);
+  rightLinesEl.children[idx] && rightLinesEl.children[idx].scrollIntoView({behavior:'smooth',block:'center'});
+});
+
+// ---------- UI wiring ----------
+document.getElementById('render').addEventListener('click', ()=>{
+  const raw = document.getElementById('raw').value;
+  const files = parseUnifiedDiff(raw);
+  renderFiles(files);
+});
+
+document.getElementById('collapseToggle').addEventListener('change', ()=>{
+  if(currentFiles.length) renderFileDiff(currentFiles[currentFileIndex]);
+});
+
+// drag/drop file
+const dropzone = document.getElementById('dropzone');
+dropzone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropzone.style.borderColor='rgba(255,255,255,0.12)'; });
+dropzone.addEventListener('dragleave', ()=>{ dropzone.style.borderColor='transparent'; });
+dropzone.addEventListener('drop', (e)=>{
+  e.preventDefault(); dropzone.style.borderColor='transparent';
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{ document.getElementById('raw').value = ev.target.result; document.getElementById('render').click(); };
+  reader.readAsText(f);
+});
+document.getElementById('fileinput').addEventListener('change', (ev)=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const reader = new FileReader(); reader.onload = (e)=>{ document.getElementById('raw').value = e.target.result; document.getElementById('render').click(); }; reader.readAsText(f);
+});
+
+// support keyboard paste rendering (Ctrl+Enter)
+document.getElementById('raw').addEventListener('keydown', (e)=>{
+  if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); document.getElementById('render').click(); }
+});
+
+// small convenience: auto-render if paste event into textarea
+document.getElementById('raw').addEventListener('paste', (e)=>{
+  // delay to allow content to be inserted
+  setTimeout(()=>{/* no auto-render by default; leave to user */}, 10);
+});
+</script>
+</body>
+</html>
