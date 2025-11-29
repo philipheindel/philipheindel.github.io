@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tkinter GUI Builder</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="main-container">
+        <aside id="toolbox">
+            <h3>Toolbox</h3>
+            <div class="widget-item" draggable="true" data-widget="Frame">Frame</div>
+            <div class="widget-item" draggable="true" data-widget="Label">Label</div>
+            <div class="widget-item" draggable="true" data-widget="Button">Button</div>
+            <div class="widget-item" draggable="true" data-widget="Entry">Entry</div>
+            <div class="widget-item" draggable="true" data-widget="Checkbutton">Checkbutton</div>
+            </aside>
+
+        <main id="center-area">
+            <header>Window Preview</header>
+            <div id="window-preview-container">
+                <div id="preview-window">
+                    <div class="resize-handle top-left"></div>
+                    <div class="resize-handle top-right"></div>
+                    <div class="resize-handle bottom-left"></div>
+                    <div class="resize-handle bottom-right"></div>
+                    <div class="resize-handle top"></div>
+                    <div class="resize-handle bottom"></div>
+                    <div class="resize-handle left"></div>
+                    <div class="resize-handle right"></div>
+                    <span id="window-size-display">300x200</span>
+                </div>
+            </div>
+        </main>
+
+        <aside id="properties-panel">
+            <h3>Widget Properties</h3>
+            <p id="selected-widget-name">No Widget Selected</p>
+            <div id="properties-content">
+                <fieldset>
+                    <legend>Geometry</legend>
+                    X: <input type="number" id="prop-x"><br>
+                    Y: <input type="number" id="prop-y"><br>
+                    Width: <input type="number" id="prop-width"><br>
+                    Height: <input type="number" id="prop-height">
+                </fieldset>
+
+                <fieldset>
+                    <legend>Appearance</legend>
+                    <label>Text:</label><input type="text" id="prop-text"><br>
+                    <label>BG Color:</label><input type="color" id="prop-bg"><br>
+                    <label>FG Color:</label><input type="color" id="prop-fg">
+                    </fieldset>
+            </div>
+        </aside>
+    </div>
+
+    <div id="code-output-container">
+        <button id="toggle-code-btn">▼ Generated Python Code (Click to Expand)</button>
+        <textarea id="generated-code" readonly></textarea>
+        <button onclick="generateCode()">Generate Code</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
