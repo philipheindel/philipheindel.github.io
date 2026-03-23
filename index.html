@@ -5,44 +5,54 @@
     <meta content="text/html; charset=UTF-8; X-Content-Type-Options=nosniff" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Just a placeholder</title>
-    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
-    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="style/lib/simple.min.css" />
+    <link rel="stylesheet" href="style/index.css" />
 </head>
 
 <body onload="init()">
     <main>
-        <select name="month" id="month">
-            <option value="1">January</option>
-            <option value="2">February</option>
-            <option value="3">March</option>
-            <option value="4">April</option>
-            <option value="5">May</option>
-            <option value="6">June</option>
-            <option value="7">July</option>
-            <option value="8">August</option>
-            <option value="9">September</option>
-            <option value="10">October</option>
-            <option value="11">November</option>
-            <option value="12">December</option>
-        </select>
-        <input type="text" name="year" id="year" pattern="^[12][0-9]{3}$" maxlength="4" />
+        <details>
+            <summary><span id="summaryMonth">January</span> <span id="summaryYear">2024</span></summary>
+            <select name="month" id="month">
+                <option value="0">January</option>
+                <option value="1">February</option>
+                <option value="2">March</option>
+                <option value="3">April</option>
+                <option value="4">May</option>
+                <option value="5">June</option>
+                <option value="6">July</option>
+                <option value="7">August</option>
+                <option value="8">September</option>
+                <option value="9">October</option>
+                <option value="10">November</option>
+                <option value="11">December</option>
+            </select>
+            <input type="number" name="year" id="year" pattern="^[12][0-9]{3}$" maxlength="4" />
+        </details>
+        <!--
         <p>
             At <u>least</u> <b>this</b> <mark>isn't</mark> <kbd>A</kbd> normal, <code>boring 404 page.</code>
         </p>
         <p>
             This one has a button that probably doesn't do anything 👉 <button id="start">Button</button>
         </p>
+        -->
+        <p id="text"></p>
+        <button id="start">Button</button>
         <table>
-            <tr>
-                <th>Sun</th>
-                <th>Mon</th>
-                <th>Tue</th>
-                <th>Wed</th>
-                <th>Thu</th>
-                <th>Fri</th>
-                <th>Sat</th>
-            </tr>
-            <tr id="week1">
+            <thead>
+                <tr>
+                    <th>Sun</th>
+                    <th>Mon</th>
+                    <th>Tue</th>
+                    <th>Wed</th>
+                    <th>Thu</th>
+                    <th>Fri</th>
+                    <th>Sat</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="week1">
                 <td class="">
                     <span>01</span>
                 </td>
@@ -157,9 +167,14 @@
                     <span>04</span>
                 </td>
             </tr>
+            </tbody>
         </table>
     </main>
-    <script src="index.js"></script>
+    <script src="script/utility/selector.js"></script>
+    <script src="script/utility/date.js"></script>
+    <script src="script/markdown.js"></script>
+    <script src="script/event.js"></script>
+    <script src="script/index.js"></script>
 </body>
 
 </html>
